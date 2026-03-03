@@ -2,7 +2,7 @@ services:
   - type: web
     name: openclaw-darryl
     runtime: docker
-    plan: starter
+    plan: standard
     healthCheckPath: /health
     dockerCommand: node openclaw.mjs gateway --allow-unconfigured --bind lan
     envVars:
