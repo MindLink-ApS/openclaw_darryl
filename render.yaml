@@ -7,9 +7,9 @@ services:
     dockerCommand: node openclaw.mjs gateway --allow-unconfigured --bind lan
     envVars:
       - key: PORT
-        value: "8080"
+        value: "10000"
       - key: OPENCLAW_GATEWAY_PORT
-        value: "8080"
+        value: "10000"
       - key: SETUP_PASSWORD
         sync: false
       - key: OPENCLAW_STATE_DIR
