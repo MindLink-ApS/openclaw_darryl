@@ -1,0 +1,17 @@
+{
+  "name": "@openclaw/darryl-mem0",
+  "version": "2026.3.2",
+  "private": true,
+  "description": "Persistent conversational memory via Mem0 OSS",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "mem0ai": "^2.2.4"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "gateway": {
+    "mode": "local"
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "scout",
+        "default": true,
+        "name": "Scout",
+        "model": {
+          "primary": "claude-sonnet-4-5-20250514"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "provider": "brave"
+      },
+      "fetch": {
+        "enabled": true,
+        "readability": true
+      }
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "presets": ["gmail"],
+    "gmail": {
+      "account": "${SCOUT_GMAIL_ADDRESS}",
+      "label": "INBOX"
+    }
+  },
+  "darryl": {
+    "recipientEmail": "darryl.thompson@raymondjames.com"
+  },
+  "plugins": {
+    "darryl-leads": {
+      "enabled": true,
+      "config": {
+        "dbPath": "/data/.openclaw/darryl/leads.db"
+      }
+    },
+    "darryl-email": {
+      "enabled": true,
+      "config": {
+        "host": "smtp.gmail.com",
+        "port": 587,
+        "secure": false,
+        "user": "${SCOUT_GMAIL_ADDRESS}",
+        "pass": "${SCOUT_GMAIL_APP_PASSWORD}",
+        "from": "Scout <${SCOUT_GMAIL_ADDRESS}>"
+      }
+    },
+    "darryl-mem0": {
+      "enabled": true,
+      "config": {
+        "dataDir": "/data/.openclaw/mem0",
+        "userId": "darryl",
+        "autoRecall": true,
+        "autoCapture": true,
+        "openaiApiKey": "${OPENAI_API_KEY}"
+      }
+    }
+  },
+  "cron": {
+    "jobs": [
+      {
+        "id": "daily-scout",
+        "schedule": "0 11 * * *",
+        "timezone": "America/Chicago",
+        "description": "Daily P&C executive scout (6 AM CT = 11:00 UTC)",
+        "agentTurn": {
+          "message": "Run daily P&C executive scout. Search all configured sources for insurance executive job changes in the last 60 days. Validate, deduplicate, and store leads. Export CSV and email the daily report to Darryl with up to 25 leads. Include a summary of search activity and any leads needing human review.",
+          "isolated": true
+        }
+      },
+      {
+        "id": "weekly-digest-report",
+        "schedule": "0 14 * * 1",
+        "timezone": "America/Chicago",
+        "description": "Weekly pipeline summary (Monday 9 AM CT = 14:00 UTC)",
+        "agentTurn": {
+          "message": "Generate a weekly summary of all pipeline activity. Include: total leads by status, new leads added this week, leads moved through pipeline stages, any stale leads needing attention. Email the summary report to Darryl.",
+          "isolated": true
+        }
+      }
+    ]
+  }
+}

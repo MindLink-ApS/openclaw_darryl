@@ -1,0 +1,55 @@
+{
+  "id": "darryl-mem0",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dataDir": {
+        "type": "string",
+        "description": "Directory for memory data files"
+      },
+      "userId": {
+        "type": "string",
+        "description": "Default user ID for memories"
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "description": "Inject relevant memories before agent starts"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "description": "Capture key facts from conversations automatically"
+      },
+      "openaiApiKey": {
+        "type": "string",
+        "description": "OpenAI API key for mem0 embeddings and LLM"
+      }
+    }
+  },
+  "uiHints": {
+    "dataDir": {
+      "label": "Data Directory",
+      "placeholder": "~/.openclaw/mem0",
+      "advanced": true
+    },
+    "userId": {
+      "label": "User ID",
+      "placeholder": "darryl"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Automatically inject relevant memories into agent context"
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Automatically capture key facts from conversations"
+    },
+    "openaiApiKey": {
+      "label": "OpenAI API Key",
+      "sensitive": true,
+      "placeholder": "sk-proj-...",
+      "help": "API key for embeddings and LLM (or use ${OPENAI_API_KEY})"
+    }
+  }
+}

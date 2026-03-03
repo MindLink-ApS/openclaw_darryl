@@ -1,20 +1,35 @@
 services:
   - type: web
-    name: openclaw
+    name: openclaw-darryl
     runtime: docker
     plan: starter
     healthCheckPath: /health
+    dockerCommand: node openclaw.mjs gateway --allow-unconfigured --bind lan
     envVars:
       - key: PORT
+        value: "8080"
+      - key: OPENCLAW_GATEWAY_PORT
         value: "8080"
       - key: SETUP_PASSWORD
         sync: false
       - key: OPENCLAW_STATE_DIR
         value: /data/.openclaw
+      - key: OPENCLAW_CONFIG_PATH
+        value: /app/config/darryl-config.json
       - key: OPENCLAW_WORKSPACE_DIR
-        value: /data/workspace
+        value: /app/workspace
       - key: OPENCLAW_GATEWAY_TOKEN
         generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SCOUT_GMAIL_ADDRESS
+        sync: false
+      - key: SCOUT_GMAIL_APP_PASSWORD
+        sync: false
     disk:
       name: openclaw-data
       mountPath: /data

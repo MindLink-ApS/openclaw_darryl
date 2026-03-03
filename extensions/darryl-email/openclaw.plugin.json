@@ -1,0 +1,40 @@
+{
+  "id": "darryl-email",
+  "uiHints": {
+    "pass": {
+      "label": "SMTP Password",
+      "sensitive": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "host": {
+        "type": "string",
+        "description": "SMTP host"
+      },
+      "port": {
+        "type": "number",
+        "description": "SMTP port"
+      },
+      "secure": {
+        "type": "boolean",
+        "description": "Use TLS"
+      },
+      "user": {
+        "type": "string",
+        "description": "SMTP username"
+      },
+      "pass": {
+        "type": "string",
+        "description": "SMTP password"
+      },
+      "from": {
+        "type": "string",
+        "description": "Default From address"
+      }
+    },
+    "required": ["host", "port", "user", "pass", "from"]
+  }
+}

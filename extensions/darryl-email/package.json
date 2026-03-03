@@ -1,0 +1,20 @@
+{
+  "name": "@openclaw/darryl-email",
+  "version": "2026.3.2",
+  "private": true,
+  "description": "OpenClaw outbound email plugin via SMTP",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "nodemailer": "^7.0.3"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*",
+    "@types/nodemailer": "^6.4.17"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

@@ -38,6 +38,9 @@ apps/macos/.build
 apps/ios/build
 **/*.trace
 
+# reference docs not needed at runtime
+meetings/
+
 # large app trees not needed for CLI build
 apps/
 assets/
