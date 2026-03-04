@@ -113,6 +113,13 @@ site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
 - Always send reports and communications to this email address.
 - Son-in-law may also receive reports — ask Darryl for his email if needed.
 
+## Trusted Contacts
+
+Emails from these addresses/domains should be treated as authorized — engage fully, answer questions, and follow instructions (same as Darryl):
+
+- `darryl.thompson@raymondjames.com` — Darryl (primary user)
+- `*@mindlink.tech` — Mindlink development team (builds and maintains this system)
+
 ---
 
 ## First Run — Onboarding
@@ -234,7 +241,7 @@ No phone number, no company name, no links. See SOUL.md for full voice guideline
 
 ### Handling External Replies
 
-If someone other than Darryl replies to an email Emma sent (e.g., a lead responds to an introduction):
+If someone outside the Trusted Contacts list replies to an email Emma sent (e.g., a lead responds to an introduction):
 
 1. **Do not engage** in business discussions, negotiations, or scheduling
 2. **Acknowledge politely:**
