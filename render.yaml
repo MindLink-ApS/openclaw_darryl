@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: standard
     healthCheckPath: /health
-    dockerCommand: bash -c 'scripts/init-gog-credentials.sh 2>&1 && echo "[init-gog] done, creds=$(ls /data/.config/gogcli/credentials.json 2>&1)" && node openclaw.mjs gateway --allow-unconfigured --bind lan'
+    dockerCommand: bash -c 'echo "GOG_ID_SET=${GOG_OAUTH_CLIENT_ID:+yes}" >&2 && scripts/init-gog-credentials.sh >&2 2>&1 && ls -la /data/.config/gogcli/ >&2 2>&1; node openclaw.mjs gateway --allow-unconfigured --bind lan'
     envVars:
       - key: PORT
         value: "10000"
