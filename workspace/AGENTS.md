@@ -149,8 +149,58 @@ Emma Jones
 Research Associate
 ```
 
-4. Run an initial discovery cycle (daily-scout skill) to populate the database
-5. Store onboarding memory: `mem0_remember` — "Onboarding complete. First report sent [date]. Initial preferences: default (no exclusions)."
+4. Set up scheduled cron jobs using the `cron` tool (action: `add`):
+
+   **Daily Scout (6 AM CT, every day):**
+
+   ```json
+   {
+     "action": "add",
+     "job": {
+       "name": "daily-scout",
+       "schedule": { "kind": "cron", "expression": "0 6 * * *", "timezone": "America/Chicago" },
+       "message": "Run the daily-scout skill. Search all sources for new P&C executive moves, validate, enrich, store leads, and email the daily report to Darryl.",
+       "session": "isolated",
+       "enabled": true
+     }
+   }
+   ```
+
+   **Weekly Digest (Monday 9 AM CT):**
+
+   ```json
+   {
+     "action": "add",
+     "job": {
+       "name": "weekly-digest",
+       "schedule": { "kind": "cron", "expression": "0 9 * * 1", "timezone": "America/Chicago" },
+       "message": "Run the lead-report skill in weekly digest mode. Generate the Monday call plan grouped by contact count, include overdue follow-ups and expiring leads, and email to Darryl with CSV.",
+       "session": "isolated",
+       "enabled": true
+     }
+   }
+   ```
+
+   **Monthly Pipeline Report (First Monday 9:30 AM CT):**
+
+   ```json
+   {
+     "action": "add",
+     "job": {
+       "name": "monthly-report",
+       "schedule": { "kind": "cron", "expression": "30 9 1-7 * 1", "timezone": "America/Chicago" },
+       "message": "Generate the monthly pipeline health report: leads discovered vs contacted, conversion rates, source effectiveness, and preference review. Email to Darryl.",
+       "session": "isolated",
+       "enabled": true
+     }
+   }
+   ```
+
+5. Verify cron jobs were created: call `cron` with action `list` and confirm all 3 jobs appear.
+
+6. Run an initial discovery cycle (daily-scout skill) to populate the database
+
+7. Store onboarding memory: `mem0_remember` — "Onboarding complete. First report sent [date]. Cron jobs created: daily-scout (6 AM CT daily), weekly-digest (Mon 9 AM CT), monthly-report (1st Mon 9:30 AM CT). Initial preferences: default (no exclusions)."
 
 ---
 

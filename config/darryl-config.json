@@ -7,6 +7,21 @@
     }
   },
   "agents": {
+    "defaults": {
+      "userTimezone": "America/Chicago",
+      "skipBootstrap": true,
+      "thinkingDefault": "low",
+      "heartbeat": {
+        "every": "30m",
+        "activeHours": {
+          "start": "06:00",
+          "end": "19:00",
+          "timezone": "America/Chicago"
+        },
+        "target": "none",
+        "lightContext": false
+      }
+    },
     "list": [
       {
         "id": "emma",
