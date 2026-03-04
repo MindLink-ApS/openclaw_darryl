@@ -50,7 +50,9 @@
     "presets": ["gmail"],
     "gmail": {
       "account": "${EMMA_GMAIL_ADDRESS}",
-      "label": "INBOX"
+      "label": "INBOX",
+      "topic": "projects/mail-project-489210/topics/gmail-watch-emma",
+      "pushToken": "${GMAIL_PUSH_TOKEN}"
     }
   },
   "plugins": {

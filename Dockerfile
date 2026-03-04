@@ -93,6 +93,10 @@ RUN if [ -n "$OPENCLAW_INSTALL_DOCKER_CLI" ]; then \
       rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     fi
 
+# Install gogcli for Gmail Pub/Sub watch pipeline.
+RUN curl -L https://github.com/steipete/gog/releases/latest/download/gog_Linux_x86_64.tar.gz \
+  | tar -xz -C /usr/local/bin && chmod +x /usr/local/bin/gog
+
 USER node
 COPY --chown=node:node . .
 # Normalize copied plugin/agent paths so plugin safety checks do not reject

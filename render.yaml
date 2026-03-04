@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: standard
     healthCheckPath: /health
-    dockerCommand: node openclaw.mjs gateway --allow-unconfigured --bind lan
+    dockerCommand: bash -c 'scripts/init-gog-credentials.sh && node openclaw.mjs gateway --allow-unconfigured --bind lan'
     envVars:
       - key: PORT
         value: "10000"
@@ -31,6 +31,20 @@ services:
       - key: EMMA_GMAIL_ADDRESS
         sync: false
       - key: EMMA_GMAIL_APP_PASSWORD
+        sync: false
+      - key: GMAIL_PUSH_TOKEN
+        sync: false
+      - key: XDG_CONFIG_HOME
+        value: /data/.config
+      - key: GOG_KEYRING_PASSWORD
+        sync: false
+      - key: GOG_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOG_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOG_KEYRING_TOKEN_EMMA
+        sync: false
+      - key: GOG_KEYRING_TOKEN_EMMA_DEFAULT
         sync: false
     disk:
       name: openclaw-data

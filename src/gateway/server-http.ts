@@ -11,6 +11,7 @@ import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import { CANVAS_WS_PATH, handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
 import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
+import { handleGmailPubsubProxy } from "../hooks/gmail-proxy.js";
 import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
@@ -572,6 +573,10 @@ export function createGatewayHttpServer(opts: {
         ? resolvePluginRoutePathContext(requestPath)
         : null;
       const requestStages: GatewayHttpRequestStage[] = [
+        {
+          name: "gmail-pubsub-proxy",
+          run: () => handleGmailPubsubProxy(req, res),
+        },
         {
           name: "hooks",
           run: () => handleHooksRequest(req, res),
