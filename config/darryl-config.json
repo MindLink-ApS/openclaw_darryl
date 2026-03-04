@@ -26,6 +26,7 @@
   },
   "hooks": {
     "enabled": true,
+    "token": "${HOOKS_TOKEN}",
     "presets": ["gmail"],
     "gmail": {
       "account": "${EMMA_GMAIL_ADDRESS}",
@@ -33,6 +34,9 @@
     }
   },
   "plugins": {
+    "slots": {
+      "memory": "darryl-mem0"
+    },
     "entries": {
       "darryl-leads": {
         "enabled": true,
