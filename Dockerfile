@@ -94,8 +94,8 @@ RUN if [ -n "$OPENCLAW_INSTALL_DOCKER_CLI" ]; then \
     fi
 
 # Install gogcli for Gmail Pub/Sub watch pipeline.
-RUN curl -L https://github.com/steipete/gog/releases/latest/download/gog_Linux_x86_64.tar.gz \
-  | tar -xz -C /usr/local/bin && chmod +x /usr/local/bin/gog
+RUN curl -fL https://github.com/steipete/gogcli/releases/download/v0.11.0/gogcli_0.11.0_linux_amd64.tar.gz \
+  | tar -xz -C /usr/local/bin gog && chmod +x /usr/local/bin/gog
 
 USER node
 COPY --chown=node:node . .
