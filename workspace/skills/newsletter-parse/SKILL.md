@@ -14,6 +14,7 @@ Run this skill when Darryl forwards an email containing a newsletter digest (e.g
 ## Step 1: Extract People Mentioned
 
 Parse the email body to identify every person mentioned along with:
+
 - **Full name**
 - **New title** (if mentioned)
 - **New company** (if mentioned)
@@ -21,6 +22,7 @@ Parse the email body to identify every person mentioned along with:
 - **Any dates** mentioned
 
 Common patterns to look for:
+
 - "[Name] has joined [Company] as [Title]"
 - "[Name] was named [Title] at [Company]"
 - "[Name] has been appointed [Title] of [Company]"
@@ -44,6 +46,8 @@ For each person that passes the P&C filter:
 2. **Company HQ:** `web_search` for `"<company>" headquarters address insurance`
 3. **Geography:** Check the article, LinkedIn profile, or company website
 4. **Functional focus:** Infer from title (VP Distribution → distribution, AVP Underwriting → underwriting, etc.)
+5. **Email:** Search company team page and direct name search (see lead-enrich skill for full query list). Validate domain match and person match before storing.
+6. **Phone:** Search company directory and speaker bios (see lead-enrich skill for full query list). Validate before storing.
 
 ## Step 4: Store Leads
 
@@ -73,6 +77,7 @@ Send a summary email back to Darryl using `email_send`:
 
 **Subject:** `Newsletter Processed — [N] Leads Extracted from [Newsletter Name]`
 **Body:**
+
 ```
 I processed the [Newsletter Name] digest you forwarded ([date]).
 

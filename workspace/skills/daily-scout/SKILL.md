@@ -85,6 +85,25 @@ For each validated lead:
 2. Search for company HQ: `web_search` for `"<company>" headquarters address`
 3. Look for geography info in the article or company page
 4. Determine functional focus from title/context (distribution, underwriting, claims, etc.)
+5. Search for email address (run 2-3 of these, stop when found):
+   ```
+   web_search: "<full name>" "<company>" email
+   web_search: "<company>" "leadership" OR "our team" OR "executive team"
+   web_search: "<full name>" email site:linkedin.com OR site:insurancejournal.com OR site:ambest.com
+   ```
+   If a company team/leadership page is found, `web_fetch` it and look for the person's listed email.
+6. Search for phone number (run 1-2 of these, stop when found):
+   ```
+   web_search: "<full name>" "<company>" phone OR "contact"
+   web_search: "<company>" "leadership" OR "directory" phone
+   ```
+   If a directory or team page is found, `web_fetch` it and look for the person's direct phone.
+7. **Validate any contact details found:**
+   - Confirm the email/phone appears on a page that names the same person at the same company
+   - Cross-reference: does the email domain match the company's domain?
+   - Never adopt a generic info@/contact@/hr@ address as a personal email
+   - Never guess patterns — only use explicitly published values
+   - Record the source URL where the contact detail was found
 
 ## Step 4: Store Leads
 
@@ -96,6 +115,8 @@ For each enriched lead, call `leads_upsert` with all available fields:
   "current_title": "Vice President, Business Development",
   "current_company": "Chubb",
   "linkedin_url": "https://linkedin.com/in/janesmith",
+  "email_address": "jane.smith@chubb.com",
+  "mobile_phone": "+1-212-555-0199",
   "source_published_date": "2026-02-15",
   "move_type": "new_employer",
   "geography": "New York, NY",
@@ -106,12 +127,16 @@ For each enriched lead, call `leads_upsert` with all available fields:
       "source_url": "https://insurancejournal.com/...",
       "source_label": "Insurance Journal",
       "published_on": "2026-02-15"
+    },
+    {
+      "source_url": "https://chubb.com/about/leadership",
+      "source_label": "Chubb Leadership Page (email)"
     }
   ]
 }
 ```
 
-**Never fabricate** email addresses or phone numbers. Leave those fields empty unless found in a public, lawful source.
+**Never fabricate** email addresses or phone numbers. Leave those fields empty if not found. Never guess email patterns (e.g., firstname.lastname@company.com). Always record the source URL where a contact detail was found.
 
 ## Step 5: Generate Report
 

@@ -60,7 +60,12 @@ For each match, extract: full name, title, company, geography, dates, LinkedIn U
 
 ### 5. ENRICH
 
-Add functional focus, HQ address, contact info (only if publicly/lawfully available). Never fabricate or guess email addresses or phone numbers.
+Add functional focus, HQ address, and proactively search for contact details:
+
+- **Email:** Search company leadership/team pages, industry directories (AM Best, NAIC), conference speaker bios, and press release contact sections. Use `web_fetch` to read promising pages.
+- **Phone:** Search company directories, speaker bios, and industry directory listings.
+- **Validate** every contact detail: confirm the name + company match on the source page, verify the email domain matches the company, skip generic addresses (info@, contact@). Record source URLs.
+- Never fabricate or guess email addresses or phone numbers. Leave blank if not found.
 
 ### 6. WRITE
 
