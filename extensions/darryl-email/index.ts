@@ -1,6 +1,7 @@
-import type { Transporter } from "nodemailer";
 import { Type } from "@sinclair/typebox";
+import type { Transporter } from "nodemailer";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { checkInbox } from "./src/inbox.js";
 import { createTransporter, sendEmail, sendEmailWithCsv, type SmtpConfig } from "./src/send.js";
 
 const plugin = {
@@ -55,8 +56,7 @@ const plugin = {
     api.registerTool({
       name: "email_send",
       label: "Send Email",
-      description:
-        "Send a plain-text email via SMTP. Requires SMTP credentials in plugin config.",
+      description: "Send a plain-text email via SMTP. Requires SMTP credentials in plugin config.",
       parameters: Type.Object({
         to: Type.String({ description: "Recipient email address." }),
         subject: Type.String({ description: "Email subject line." }),
@@ -95,8 +95,7 @@ const plugin = {
     api.registerTool({
       name: "email_send_csv",
       label: "Send Email with CSV",
-      description:
-        "Send a plain-text email with a CSV file attachment via SMTP.",
+      description: "Send a plain-text email with a CSV file attachment via SMTP.",
       parameters: Type.Object({
         to: Type.String({ description: "Recipient email address." }),
         subject: Type.String({ description: "Email subject line." }),
@@ -133,6 +132,43 @@ const plugin = {
               text: JSON.stringify({ success: true, ...result }),
             },
           ],
+        };
+      },
+    });
+
+    // --- email_inbox_check tool ---
+    api.registerTool({
+      name: "email_inbox_check",
+      label: "Check Inbox",
+      description:
+        "Check for recent unread emails in the Gmail inbox. Returns unread messages from the last 2 hours. Use during heartbeat to catch emails missed by push notifications.",
+      parameters: Type.Object({
+        max_results: Type.Optional(
+          Type.Number({
+            description: "Maximum number of emails to return. Default: 20.",
+            default: 20,
+          }),
+        ),
+      }),
+      async execute(_toolCallId, params) {
+        const p = params as { max_results?: number };
+        const account = smtpConfig.user;
+        if (!account) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  success: false,
+                  error: "No Gmail account configured (SMTP user not set)",
+                }),
+              },
+            ],
+          };
+        }
+        const result = await checkInbox(account, p.max_results ?? 20);
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
         };
       },
     });
