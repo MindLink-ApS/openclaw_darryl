@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: standard
     healthCheckPath: /health
-    dockerCommand: bash -c 'echo "GOG_ID_SET=${GOG_OAUTH_CLIENT_ID:+yes}" >&2 && scripts/init-gog-credentials.sh >&2 2>&1 && ls -la /data/.config/gogcli/ >&2 2>&1; node openclaw.mjs gateway --allow-unconfigured --bind lan'
+    dockerCommand: bash -c 'node -e "console.log(JSON.stringify({GOG_ID:!!process.env.GOG_OAUTH_CLIENT_ID,GOG_SEC:!!process.env.GOG_OAUTH_CLIENT_SECRET,GOG_TOK:!!process.env.GOG_KEYRING_TOKEN_EMMA,XDG:process.env.XDG_CONFIG_HOME}))" && scripts/init-gog-credentials.sh && ls /data/.config/gogcli/ 2>&1 | head -5; exec node openclaw.mjs gateway --allow-unconfigured --bind lan'
     envVars:
       - key: PORT
         value: "10000"
