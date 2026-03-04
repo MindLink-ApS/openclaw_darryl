@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import { getAcpSessionManager } from "../acp/control-plane/manager.js";
 import { ACP_SESSION_IDENTITY_RENDERER_VERSION } from "../acp/runtime/session-identifiers.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
@@ -68,6 +69,9 @@ export async function startGatewaySidecars(params: {
   } catch (err) {
     params.logBrowser.error(`server failed to start: ${String(err)}`);
   }
+
+  // Provision gog credentials from env vars (Render deployment).
+  provisionGogCredentials(params.logHooks);
 
   // Start Gmail watcher if configured (hooks.gmail.account).
   await startGmailWatcherWithLogs({
@@ -188,4 +192,62 @@ export async function startGatewaySidecars(params: {
   }
 
   return { browserControl, pluginServices };
+}
+
+/**
+ * Provision gog OAuth credentials from env vars to disk.
+ * Required on Render where credentials can't be pre-baked into the image.
+ * Runs inside the gateway process so log output is captured by Render.
+ */
+function provisionGogCredentials(log: { info: (msg: string) => void }): void {
+  const clientId = process.env.GOG_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOG_OAUTH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    log.info(
+      `gog credentials: skipped (GOG_OAUTH_CLIENT_ID=${clientId ? "set" : "missing"}, GOG_OAUTH_CLIENT_SECRET=${clientSecret ? "set" : "missing"})`,
+    );
+    return;
+  }
+
+  try {
+    const xdg = process.env.XDG_CONFIG_HOME || "";
+    if (!xdg) {
+      return;
+    } // Only provision when XDG_CONFIG_HOME is explicitly set (i.e. Render)
+    const configDir = `${xdg}/gogcli`;
+    const keyringDir = `${configDir}/keyring`;
+
+    mkdirSync(keyringDir, { recursive: true });
+    writeFileSync(
+      `${configDir}/credentials.json`,
+      JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    );
+    writeFileSync(
+      `${configDir}/config.json`,
+      JSON.stringify({ keyring_backend: process.env.GOG_KEYRING_BACKEND || "file" }),
+    );
+
+    const emmaToken = process.env.GOG_KEYRING_TOKEN_EMMA;
+    const emmaDefault = process.env.GOG_KEYRING_TOKEN_EMMA_DEFAULT;
+    if (emmaToken) {
+      writeFileSync(`${keyringDir}/token:assistant.emmajones@gmail.com`, emmaToken);
+    }
+    if (emmaDefault) {
+      writeFileSync(`${keyringDir}/token:default:assistant.emmajones@gmail.com`, emmaDefault);
+    }
+
+    try {
+      chmodSync(configDir, 0o700);
+      chmodSync(keyringDir, 0o700);
+    } catch {
+      // best-effort
+    }
+
+    log.info(
+      `gog credentials: provisioned at ${configDir} (keyring tokens: emma=${!!emmaToken}, default=${!!emmaDefault})`,
+    );
+  } catch (err) {
+    log.info(`gog credentials: failed — ${String(err)}`);
+  }
 }
