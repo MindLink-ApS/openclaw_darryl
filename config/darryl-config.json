@@ -12,6 +12,7 @@
         "id": "emma",
         "default": true,
         "name": "Emma Jones",
+        "workspace": "/app/workspace",
         "model": {
           "primary": "claude-sonnet-4-5-20250514"
         }
