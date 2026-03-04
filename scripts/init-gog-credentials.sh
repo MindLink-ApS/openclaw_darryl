@@ -54,3 +54,16 @@ chmod 600 "$CONFIG_DIR/credentials.json" "$CONFIG_DIR/config.json"
 find "$KEYRING_DIR" -type f -exec chmod 600 {} +
 
 echo "[init-gog] Credentials provisioned at $CONFIG_DIR"
+
+# Bootstrap Gmail watch state so gog serve has a valid state file.
+# Safe to run on every deploy — Gmail API's users.watch is idempotent.
+if command -v gog >/dev/null 2>&1 && [ -n "${EMMA_GMAIL_ADDRESS:-}" ]; then
+  echo "[init-gog] Running gog gmail watch start..."
+  gog gmail watch start \
+    --account "$EMMA_GMAIL_ADDRESS" \
+    --label INBOX \
+    --topic "projects/mail-project-489210/topics/gmail-watch-emma" \
+    --no-input \
+    && echo "[init-gog] Gmail watch started successfully" \
+    || echo "[init-gog] WARNING: watch start failed (gateway will retry)"
+fi
