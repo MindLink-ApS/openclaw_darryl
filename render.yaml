@@ -26,9 +26,9 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-      - key: SCOUT_GMAIL_ADDRESS
+      - key: EMMA_GMAIL_ADDRESS
         sync: false
-      - key: SCOUT_GMAIL_APP_PASSWORD
+      - key: EMMA_GMAIL_APP_PASSWORD
         sync: false
     disk:
       name: openclaw-data

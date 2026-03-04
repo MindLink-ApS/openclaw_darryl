@@ -5,9 +5,9 @@
   "agents": {
     "list": [
       {
-        "id": "scout",
+        "id": "emma",
         "default": true,
-        "name": "Scout",
+        "name": "Emma Jones",
         "model": {
           "primary": "claude-sonnet-4-5-20250514"
         }
@@ -28,7 +28,7 @@
     "enabled": true,
     "presets": ["gmail"],
     "gmail": {
-      "account": "${SCOUT_GMAIL_ADDRESS}",
+      "account": "${EMMA_GMAIL_ADDRESS}",
       "label": "INBOX"
     }
   },
@@ -46,9 +46,9 @@
           "host": "smtp.gmail.com",
           "port": 587,
           "secure": false,
-          "user": "${SCOUT_GMAIL_ADDRESS}",
-          "pass": "${SCOUT_GMAIL_APP_PASSWORD}",
-          "from": "Scout <${SCOUT_GMAIL_ADDRESS}>"
+          "user": "${EMMA_GMAIL_ADDRESS}",
+          "pass": "${EMMA_GMAIL_APP_PASSWORD}",
+          "from": "Emma Jones <${EMMA_GMAIL_ADDRESS}>"
         }
       },
       "darryl-mem0": {

@@ -17,7 +17,7 @@
 
 ## Agent Relationship
 
-- Darryl is the sole user of this Scout agent
+- Darryl is the sole user of this Emma Jones agent
 - He forwards "Comings & Goings" newsletter digests for processing
 - He provides feedback on lead quality and pipeline updates
 - All BCCed emails and interactions should be remembered for context

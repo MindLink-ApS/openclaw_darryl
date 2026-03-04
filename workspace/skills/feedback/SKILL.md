@@ -1,6 +1,6 @@
 ---
 name: feedback
-description: Process Darryl's feedback on leads and search quality. Handles corrections like "this was bad", "don't send me tech people", "this lead is great", and preference updates. Learns patterns to improve future scouting.
+description: Process Darryl's feedback on leads and search quality. Handles corrections like "this was bad", "don't send me tech people", "this lead is great", and preference updates. Learns patterns to improve future searching.
 metadata:
   openclaw:
     emoji: "💬"
@@ -14,6 +14,7 @@ Run this skill when Darryl provides feedback on leads, reports, or search qualit
 ## Types of Feedback
 
 ### 1. Lead Quality Feedback
+
 **Trigger:** "This lead was bad", "Lead #42 is not relevant", "Remove John Smith"
 
 1. Identify the lead — use `leads_search` by name or `leads_get` by ID
@@ -26,6 +27,7 @@ Run this skill when Darryl provides feedback on leads, reports, or search qualit
    - Include title and company for pattern matching
 
 ### 2. Category Exclusions
+
 **Trigger:** "Don't send me people in tech", "Skip life insurance", "No underwriters under AVP level"
 
 1. Parse the exclusion criteria (department, title level, insurance line, geography, etc.)
@@ -37,9 +39,10 @@ Run this skill when Darryl provides feedback on leads, reports, or search qualit
 4. Confirm back to Darryl via `email_send`:
    - What was excluded and why
    - How many existing leads were affected
-   - "Future scouting will exclude [category]"
+   - "Future searching will exclude [category]"
 
 ### 3. Report Format Preferences
+
 **Trigger:** "I want more detail on geography", "Include the source article links", "Make reports shorter"
 
 1. Store the preference via `mem0_remember`:
@@ -47,6 +50,7 @@ Run this skill when Darryl provides feedback on leads, reports, or search qualit
 2. Confirm via `email_send`
 
 ### 4. Source Quality Feedback
+
 **Trigger:** "Insurance Journal is always wrong", "PropertyCasualty360 has the best leads"
 
 1. Store the source quality note via `mem0_remember`:
@@ -54,16 +58,18 @@ Run this skill when Darryl provides feedback on leads, reports, or search qualit
 2. This will influence future search prioritization via auto-recall
 
 ### 5. Positive Reinforcement
+
 **Trigger:** "Great lead!", "More like this one", "This is exactly what I need"
 
 1. Identify the lead
 2. Store the positive pattern via `mem0_remember`:
    - "GOOD PATTERN: Darryl liked [Name] at [Company] — title: [title], company type: [type], geography: [geo]"
-3. Use this to prioritize similar leads in future scouting
+3. Use this to prioritize similar leads in future searching
 
 ## After Processing
 
 Always reply to Darryl via `email_send` confirming:
+
 - What feedback was received
 - What action was taken
 - What will change going forward
@@ -71,6 +77,7 @@ Always reply to Darryl via `email_send` confirming:
 ## Memory Naming Conventions
 
 Use these prefixes for stored feedback memories so they're easy to recall:
+
 - `EXCLUSION:` — things to avoid
 - `GOOD PATTERN:` — things to seek out
 - `REPORT PREFERENCE:` — how reports should look

@@ -1,15 +1,15 @@
 ---
 name: daily-scout
-description: Run the daily P&C insurance executive move scout. Searches trade journals, company newsrooms, and LinkedIn for executive job changes in the last 60 days, validates and stores leads, then emails a CSV report to Darryl.
+description: Run the daily P&C insurance executive move discovery. Searches trade journals, company newsrooms, and LinkedIn for executive job changes in the last 60 days, validates and stores leads, then emails a CSV report to Darryl.
 metadata:
   openclaw:
     emoji: "🔍"
     always: true
 ---
 
-# Daily Scout — P&C Executive Move Discovery
+# Daily Discovery — P&C Executive Move Discovery
 
-Run this skill when triggered by the daily cron job or when Darryl asks you to scout for new leads.
+Run this skill when triggered by the daily cron job or when Darryl asks you to search for new leads.
 
 ## Step 0: Recall Preferences & Exclusions
 
@@ -25,6 +25,7 @@ Before searching, load Darryl's feedback and preferences:
 Run these web searches in sequence. For each, use the `web_search` tool:
 
 ### Trade journals (highest yield)
+
 ```
 "property casualty" OR "P&C" "joined" OR "appointed" OR "promoted" site:insurancejournal.com
 "property casualty" insurance "new role" OR "hired" OR "joins" site:businessinsurance.com
@@ -34,6 +35,7 @@ P&C insurance executive "new position" OR "new role" site:propertycasualty360.co
 ```
 
 ### Company newsrooms
+
 ```
 insurance "chief development officer" OR "head of development" appointed OR hired 2026
 P&C "regional director" OR "assistant vice president" new role OR joined 2026
@@ -41,6 +43,7 @@ insurance "underwriting leader" OR "senior underwriter" promoted OR appointed 20
 ```
 
 ### LinkedIn public content
+
 ```
 site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
 site:linkedin.com/posts "thrilled to join" P&C insurance 2026
@@ -48,6 +51,7 @@ site:linkedin.com/in "property casualty" OR "P&C" "joined" OR "new role" 2026
 ```
 
 ### Press releases & SEC filings
+
 ```
 "property casualty" insurance "press release" "appointed" OR "named" OR "promoted" 2026
 insurance executive appointment site:sec.gov "Form 8-K" 2026
@@ -56,6 +60,7 @@ P&C insurance "names" OR "appoints" "chief" OR "vice president" site:businesswir
 ```
 
 ### Local business journals
+
 ```
 insurance executive "joins" OR "appointed" OR "promoted" site:bizjournals.com 2026
 ```
@@ -115,10 +120,11 @@ For each enriched lead, call `leads_upsert` with all available fields:
 3. Call `email_send_csv` to send the report:
 
 **To:** darryl.thompson@raymondjames.com
-**Subject:** `Scout Daily Report — YYYY-MM-DD — N New Leads`
+**Subject:** `Emma Jones Daily Report — YYYY-MM-DD — N New Leads`
 **Body:**
+
 ```
-Daily P&C Executive Scout Report
+Daily P&C Executive Move Report
 
 Summary:
 - Sources checked: [N] trade journals, [N] company newsrooms, [N] LinkedIn searches
@@ -141,11 +147,13 @@ The attached CSV contains all leads matching today's discovery.
 
 Next scheduled run: [tomorrow at 6 AM CT]
 ```
+
 **CSV attachment:** Use the path from `leads_export_csv`
 
 ## Step 6: Remember
 
 Use `mem0_remember` to store:
+
 - Number of leads found today
 - Any new data sources discovered
 - Any patterns noticed (e.g., "Insurance Journal published a large batch of moves this week")
