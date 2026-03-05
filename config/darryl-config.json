@@ -15,7 +15,7 @@
         "every": "30m",
         "activeHours": {
           "start": "06:00",
-          "end": "19:00",
+          "end": "22:00",
           "timezone": "America/Chicago"
         },
         "target": "none",
