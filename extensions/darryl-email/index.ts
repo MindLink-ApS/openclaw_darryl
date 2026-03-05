@@ -141,7 +141,7 @@ const plugin = {
       name: "email_inbox_check",
       label: "Check Inbox",
       description:
-        "Check for recent unread emails in the Gmail inbox. Returns unread messages from the last 2 hours. Use during heartbeat to catch emails missed by push notifications.",
+        "Check for recent unread emails in the Gmail inbox. Returns unread messages from the last 24 hours. Use during heartbeat to catch emails missed by push notifications.",
       parameters: Type.Object({
         max_results: Type.Optional(
           Type.Number({

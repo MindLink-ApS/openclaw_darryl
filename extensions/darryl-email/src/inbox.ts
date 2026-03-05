@@ -20,7 +20,7 @@ export async function checkInbox(
         "gmail",
         "messages",
         "search",
-        "is:unread newer_than:2h",
+        "is:unread newer_than:1d",
         "--account",
         account,
         "--max",
