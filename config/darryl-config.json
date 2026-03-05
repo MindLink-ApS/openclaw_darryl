@@ -14,7 +14,7 @@
       "heartbeat": {
         "every": "30m",
         "activeHours": {
-          "start": "04:00",
+          "start": "06:00",
           "end": "22:00",
           "timezone": "America/Chicago"
         },
