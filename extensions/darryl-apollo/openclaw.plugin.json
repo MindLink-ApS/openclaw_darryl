@@ -1,0 +1,43 @@
+{
+  "id": "darryl-apollo",
+  "name": "Darryl Apollo",
+  "description": "Apollo.io enrichment for P&C executive leads — email + phone with hybrid sync/async",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string",
+        "description": "Apollo.io API key"
+      },
+      "syncMonthlyLimit": {
+        "type": "number",
+        "description": "Max sync enrichments per month (default 100)"
+      },
+      "asyncPhoneMonthlyLimit": {
+        "type": "number",
+        "description": "Max async phone hunts per month (default 50)"
+      },
+      "webhookBaseUrl": {
+        "type": "string",
+        "description": "Base URL for webhook callbacks (e.g. https://openclaw-darryl.onrender.com)"
+      },
+      "webhookSecret": {
+        "type": "string",
+        "description": "Secret token for webhook URL path"
+      },
+      "hooksToken": {
+        "type": "string",
+        "description": "Gateway hooks token for agent dispatch"
+      },
+      "dataDir": {
+        "type": "string",
+        "description": "Directory for Apollo usage SQLite database"
+      },
+      "leadsDbPath": {
+        "type": "string",
+        "description": "Path to the leads SQLite database (for webhook cross-DB writes)"
+      }
+    }
+  }
+}

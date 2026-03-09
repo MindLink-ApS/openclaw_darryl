@@ -10,6 +10,7 @@ export const MOVE_TYPES = [
 
 export const PIPELINE_STATUSES = [
   "new",
+  "awaiting_phone",
   "queued_for_outreach",
   "contacted",
   "in_conversation",
@@ -23,12 +24,16 @@ export const LeadUpsertParams = Type.Object(
     current_title: Type.String({ description: "Current job title" }),
     current_company: Type.String({ description: "Current company name" }),
     linkedin_url: Type.String({ description: "LinkedIn profile URL (required)" }),
-    source_published_date: Type.String({ description: "Date the source was published (YYYY-MM-DD, required)" }),
-    company_hq_address: Type.Optional(
-      Type.String({ description: "Company headquarters address" }),
+    source_published_date: Type.String({
+      description: "Date the source was published (YYYY-MM-DD, required)",
+    }),
+    company_hq_address: Type.Optional(Type.String({ description: "Company headquarters address" })),
+    email_address: Type.Optional(
+      Type.String({ description: "Email address (only if lawfully sourced)" }),
     ),
-    email_address: Type.Optional(Type.String({ description: "Email address (only if lawfully sourced)" })),
-    mobile_phone: Type.Optional(Type.String({ description: "Mobile phone number (only if lawfully sourced)" })),
+    mobile_phone: Type.Optional(
+      Type.String({ description: "Mobile phone number (only if lawfully sourced)" }),
+    ),
     move_effective_date: Type.Optional(
       Type.String({ description: "Date the job move became effective (YYYY-MM-DD)" }),
     ),
@@ -36,9 +41,7 @@ export const LeadUpsertParams = Type.Object(
       description: "Type of job change",
       default: "unspecified",
     }),
-    geography: Type.Optional(
-      Type.String({ description: "Geographic region or market" }),
-    ),
+    geography: Type.Optional(Type.String({ description: "Geographic region or market" })),
     functional_focus: Type.Optional(
       Type.String({ description: "Functional area (e.g. underwriting, claims, distribution)" }),
     ),

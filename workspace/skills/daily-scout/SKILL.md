@@ -77,70 +77,65 @@ For every search result that looks relevant:
    - Is the move within 60 days? → skip if no
 4. If passes all filters, continue to enrichment
 
-## Step 3: Enrich Each Lead
+## Step 3: Resolve Pending Leads (BEFORE new discovery)
 
-For each validated lead:
+Before enriching new leads, check all leads stuck in `awaiting_phone` status:
+
+1. Call `leads_search` with `status: "awaiting_phone"` to find pending leads
+2. Call `apollo_usage` to check budget status AND expire pending records older than 2 hours
+3. For each `awaiting_phone` lead:
+   - If the webhook already delivered the phone (lead now has `mobile_phone` populated and status was promoted to `"new"` by the webhook handler) → it was already sent to Darryl individually. Note as "(sent earlier today)" for the daily report recap.
+   - If still awaiting AND pending < 2 hours → leave alone, webhook may still arrive
+   - If pending >= 2 hours or expired → web search fallback for phone:
+     ```
+     web_search: "<full name>" "<company>" phone OR "direct line" OR "contact"
+     web_search: "<company>" "leadership" OR "directory" phone
+     ```
+
+     - Phone found via web? → `leads_upsert` with phone + status `"new"`, deliver in today's report
+     - Still no phone? → `leads_update_pipeline` to `"needs_human_review"`, never deliver
+
+## Step 4: Enrich Each New Lead via Apollo
+
+For each validated lead from Step 2:
 
 1. Search for their LinkedIn profile: `web_search` for `"<full name>" "<company>" site:linkedin.com`
 2. Search for company HQ: `web_search` for `"<company>" headquarters address`
 3. Look for geography info in the article or company page
 4. Determine functional focus from title/context (distribution, underwriting, claims, etc.)
-5. Search for email address (run 2-3 of these, stop when found):
-   ```
-   web_search: "<full name>" "<company>" email
-   web_search: "<company>" "leadership" OR "our team" OR "executive team"
-   web_search: "<full name>" email site:linkedin.com OR site:insurancejournal.com OR site:ambest.com
-   ```
-   If a company team/leadership page is found, `web_fetch` it and look for the person's listed email.
-6. Search for phone number (run 1-2 of these, stop when found):
-   ```
-   web_search: "<full name>" "<company>" phone OR "contact"
-   web_search: "<company>" "leadership" OR "directory" phone
-   ```
-   If a directory or team page is found, `web_fetch` it and look for the person's direct phone.
-7. **Validate any contact details found:**
-   - Confirm the email/phone appears on a page that names the same person at the same company
-   - Cross-reference: does the email domain match the company's domain?
-   - Never adopt a generic info@/contact@/hr@ address as a personal email
-   - Never guess patterns — only use explicitly published values
-   - Record the source URL where the contact detail was found
 
-## Step 4: Store Leads
+### Apollo Enrichment (replaces manual email/phone search)
 
-For each enriched lead, call `leads_upsert` with all available fields:
+5. Call `apollo_enrich` (or batch up to 10 leads with `apollo_bulk_enrich`) with `first_name`, `last_name`, `organization_name`, `domain` (if known), `linkedin_url` (if known)
+6. Based on the result:
+   - **`deliver: true` (complete — both email + phone found):**
+     Call `leads_upsert` with all fields including `email_address`, `mobile_phone`, `status_pipeline: "new"`. Add to today's report.
+   - **`status: "awaiting_phone"` (email found, async phone hunt triggered):**
+     Call `leads_upsert` with email, `status_pipeline: "awaiting_phone"`. DO NOT include in today's report. The phone will arrive via webhook within ~15 minutes and Darryl will be notified automatically.
+   - **`status: "no_email"` or `"no_match"` (Apollo couldn't find them):**
+     Fall back to manual web search for email and phone (existing queries from lead-enrich skill). If BOTH found → `leads_upsert` status `"new"`, deliver. If not both → `leads_upsert` status `"needs_human_review"`.
+   - **`status: "budget_exhausted"`:**
+     Fall back to manual web search for both email and phone. Note budget status internally.
 
-```json
-{
-  "full_name": "Jane Smith",
-  "current_title": "Vice President, Business Development",
-  "current_company": "Chubb",
-  "linkedin_url": "https://linkedin.com/in/janesmith",
-  "email_address": "jane.smith@chubb.com",
-  "mobile_phone": "+1-212-555-0199",
-  "source_published_date": "2026-02-15",
-  "move_type": "new_employer",
-  "geography": "New York, NY",
-  "functional_focus": "business development",
-  "status_pipeline": "new",
-  "sources": [
-    {
-      "source_url": "https://insurancejournal.com/...",
-      "source_label": "Insurance Journal",
-      "published_on": "2026-02-15"
-    },
-    {
-      "source_url": "https://chubb.com/about/leadership",
-      "source_label": "Chubb Leadership Page (email)"
-    }
-  ]
-}
-```
+7. **Validate any contact details** — whether from Apollo or web search:
+   - Confirm email domain matches company domain
+   - Never adopt generic addresses (info@, contact@, hr@)
+   - Never guess patterns — only use explicitly published or Apollo-verified values
+   - Record source URLs for web-sourced contacts
 
-**Never fabricate** email addresses or phone numbers. Leave those fields empty if not found. Never guess email patterns (e.g., firstname.lastname@company.com). Always record the source URL where a contact detail was found.
+## Step 5: Store Leads
 
-## Step 5: Generate Report
+For each enriched lead, call `leads_upsert` with all available fields. Set `status_pipeline` based on Apollo result:
 
-1. Call `leads_export_csv` with today's date range to get the CSV file path
+- `"new"` if both email AND phone are confirmed
+- `"awaiting_phone"` if email found but phone pending (async Apollo or web search fallback)
+- `"needs_human_review"` if neither contact method found
+
+**Never fabricate** email addresses or phone numbers. Always record the source URL where a contact detail was found.
+
+## Step 6: Generate Report
+
+1. Call `leads_export_csv` filtered to leads with BOTH email AND phone populated (status `"new"` or `"queued_for_outreach"` with today's date range)
 2. Call `leads_stats` to get summary counts
 3. Call `email_send_csv` to send the report:
 
@@ -153,9 +148,9 @@ Daily P&C Executive Move Report
 
 Summary:
 - Sources checked: [N] trade journals, [N] company newsrooms, [N] LinkedIn searches
-- New leads found: [N]
-- Updated existing leads: [N]
-- Leads needing review: [N]
+- New complete leads today: [N] (all with verified email + phone)
+[If some were sent individually via webhook earlier:]
+- (N of these were sent to you earlier today as they became ready)
 
 Top New Leads:
 1. [Name] — [Title] @ [Company] ([Geography])
@@ -168,14 +163,14 @@ Pipeline Status:
 - Contacted: [N]
 - In conversation: [N]
 
-The attached CSV contains all leads matching today's discovery.
+The attached CSV contains all complete leads (email + phone confirmed).
 
 Next scheduled run: [tomorrow at 6 AM CT]
 ```
 
-**CSV attachment:** Use the path from `leads_export_csv`
+**CSV attachment:** Use the path from `leads_export_csv` — ONLY leads with both email and phone.
 
-## Step 6: Remember
+## Step 7: Remember
 
 Use `mem0_remember` to store:
 

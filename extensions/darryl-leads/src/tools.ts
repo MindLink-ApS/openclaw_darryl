@@ -99,8 +99,7 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
     {
       name: "leads_get",
       label: "Leads Get",
-      description:
-        "Get a single lead by ID, including all associated source URLs.",
+      description: "Get a single lead by ID, including all associated source URLs.",
       parameters: LeadGetParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
         const { id } = rawParams as { id: number };
@@ -129,7 +128,7 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
       label: "Leads Update Pipeline",
       description:
         "Update the pipeline status for a lead by ID. " +
-        "Statuses: new, queued_for_outreach, contacted, in_conversation, do_not_contact, needs_human_review.",
+        "Statuses: new, awaiting_phone, queued_for_outreach, contacted, in_conversation, do_not_contact, needs_human_review.",
       parameters: LeadUpdatePipelineParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
         const params = rawParams as UpdatePipelineParams;
@@ -186,8 +185,7 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
     {
       name: "leads_stats",
       label: "Leads Stats",
-      description:
-        "Return lead counts by pipeline status and recent additions (last 7 days).",
+      description: "Return lead counts by pipeline status and recent additions (last 7 days).",
       parameters: LeadStatsParams,
       async execute(_toolCallId: string, _rawParams: unknown): Promise<ToolResult> {
         const stats = db.getStats();

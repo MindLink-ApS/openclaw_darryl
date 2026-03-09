@@ -60,10 +60,10 @@ For each match, extract: full name, title, company, geography, dates, LinkedIn U
 
 ### 5. ENRICH
 
-Add functional focus, HQ address, and proactively search for contact details:
+Add functional focus, HQ address, and contact details via Apollo enrichment:
 
-- **Email:** Search company leadership/team pages, industry directories (AM Best, NAIC), conference speaker bios, and press release contact sections. Use `web_fetch` to read promising pages.
-- **Phone:** Search company directories, speaker bios, and industry directory listings.
+- **Primary:** Use `apollo_enrich` (single) or `apollo_bulk_enrich` (batch of up to 10) for email + phone. See "Apollo Enrichment & Delivery Rules" below for the full flow.
+- **Fallback:** If Apollo returns `no_email`, `no_match`, or `budget_exhausted`, search company leadership/team pages, industry directories (AM Best, NAIC), conference speaker bios, and press release contact sections.
 - **Validate** every contact detail: confirm the name + company match on the source page, verify the email domain matches the company, skip generic addresses (info@, contact@). Record source URLs.
 - Never fabricate or guess email addresses or phone numbers. Leave blank if not found.
 
@@ -73,7 +73,7 @@ Use `leads_upsert` to store each validated lead. Add sources via the sources arr
 
 ### 7. REPORT
 
-After discovery, use `leads_export_csv` to generate a CSV, then `email_send_csv` to deliver the report to Darryl.
+After discovery, use `leads_export_csv` to generate a CSV containing ONLY leads with both verified email AND phone, then `email_send_csv` to deliver the report to Darryl. See "Apollo Enrichment & Delivery Rules" for the delivery gate.
 
 ---
 
@@ -309,14 +309,15 @@ Use `leads_get` with a lead ID to retrieve full details including all source URL
 
 ## Pipeline Status Meanings
 
-| Status                | Meaning                                |
-| --------------------- | -------------------------------------- |
-| `new`                 | Just discovered, not yet reviewed      |
-| `queued_for_outreach` | Validated, ready for Darryl to contact |
-| `contacted`           | Darryl has reached out                 |
-| `in_conversation`     | Active dialogue                        |
-| `do_not_contact`      | Excluded — must have a reason          |
-| `needs_human_review`  | Ambiguous data or edge case            |
+| Status                | Meaning                                                                   |
+| --------------------- | ------------------------------------------------------------------------- |
+| `new`                 | Just discovered, not yet reviewed                                         |
+| `awaiting_phone`      | Email found, async phone lookup in progress — NOT delivered to Darryl yet |
+| `queued_for_outreach` | Validated, ready for Darryl to contact                                    |
+| `contacted`           | Darryl has reached out                                                    |
+| `in_conversation`     | Active dialogue                                                           |
+| `do_not_contact`      | Excluded — must have a reason                                             |
+| `needs_human_review`  | Ambiguous data or edge case                                               |
 
 ---
 
@@ -382,6 +383,56 @@ Use `mem0_recall` before each interaction to load relevant context.
 
 ---
 
+## Apollo Enrichment & Delivery Rules
+
+### Delivery Gate (STRICT — no exceptions)
+
+- A lead is delivered to Darryl ONLY when it has BOTH verified email AND usable phone number
+- Never include partial leads (email only, phone only, or neither) in reports or CSVs to Darryl
+- The `leads_export_csv` filter must always require both email_address and mobile_phone populated
+
+### Enrichment Flow
+
+- Every new lead gets a 1-credit sync Apollo enrichment via `apollo_enrich` (email + cached phones)
+- Both email and phone found → status `"new"`, deliver immediately in current report/email
+- Email only, no phone → auto-trigger async mobile hunt (1 mobile credit), store lead as `"awaiting_phone"`, DO NOT deliver yet
+- Neither found → web search fallback for both, deliver only if BOTH found
+
+### Instant Delivery (phone arrives via webhook)
+
+- When Apollo's webhook delivers a phone number, you will be woken automatically with a system message containing the lead's details
+- Send Darryl a brief email RIGHT NOW with the complete lead info
+- For a single lead: inline the details (name, title, company, email, phone, LinkedIn, geography). No CSV attachment.
+- For multiple leads resolving at once: one email listing all of them
+- Subject format: `"New Lead: [Name] — [Company]"` (single) or `"[N] New Leads Ready"` (batch)
+- Keep it short. Darryl can act on it right away.
+
+### Pending Resolution (run at start of daily-scout / newsletter-parse)
+
+- Check all `"awaiting_phone"` leads FIRST, before discovering new leads
+- Most will have already been resolved and delivered via webhook
+- Handle stragglers: pending >= 2 hours or failed → web search fallback for phone
+  - Found phone? Update lead, deliver immediately via `email_send`
+  - Not found? Set status `"needs_human_review"`, never deliver
+
+### Daily Report
+
+- Include ALL complete leads from today (including webhook-delivered ones)
+- Mark webhook-delivered leads as "(sent earlier today)" for clarity
+- CSV attached for filing/CRM import — contains ONLY leads with both email AND phone
+- Do NOT mention pending/awaiting leads in the daily report or its CSV. In direct replies to Darryl (newsletter parsing, enrichment requests), it is OK to mention that phone lookups are in progress.
+
+### Budget Management
+
+- Two separate budgets: sync (100/month default), async phone (50/month default)
+- Both configurable via `apollo_set_monthly_limit`
+- Check `apollo_usage` before batch operations to see remaining budget
+- When sync exhausted → web search only (note internally)
+- When async phone exhausted → still do sync (gets email + cached phones), web search for phone as fallback
+- Include budget status in internal tracking, not in emails to Darryl
+
+---
+
 ## Quality Thresholds
 
 Every lead record MUST have:
@@ -391,8 +442,11 @@ Every lead record MUST have:
 - Current title and company
 - Geography if publicly stated
 
+Required for delivery to Darryl (lawful sources only):
+
+- Email address AND mobile phone — both must be verified before including a lead in any report or CSV
+
 Preferred but optional:
 
 - Company HQ address
-- Email and mobile only if lawfully available
 - Functional focus area

@@ -38,7 +38,16 @@ For each person extracted:
 2. Is the title a target title? (CDO, VP, Regional Director, AVP, BD, Underwriter)
 3. If both are uncertain, mark as `needs_human_review` but still store the lead
 
-## Step 3: Enrich Each Lead
+## Step 2.5: Resolve Pending Leads
+
+Before enriching new leads, check existing `awaiting_phone` leads (same as daily-scout Step 3):
+
+1. Call `leads_search` with `status: "awaiting_phone"`
+2. Call `apollo_usage` to check budgets and expire old pending records
+3. For each `awaiting_phone` lead that has been resolved by webhook → note as "(sent earlier today)"
+4. For expired/failed pending leads → web search fallback for phone → update or mark `"needs_human_review"`
+
+## Step 3: Enrich Each Lead via Apollo
 
 For each person that passes the P&C filter:
 
@@ -46,12 +55,22 @@ For each person that passes the P&C filter:
 2. **Company HQ:** `web_search` for `"<company>" headquarters address insurance`
 3. **Geography:** Check the article, LinkedIn profile, or company website
 4. **Functional focus:** Infer from title (VP Distribution → distribution, AVP Underwriting → underwriting, etc.)
-5. **Email:** Search company team page and direct name search (see lead-enrich skill for full query list). Validate domain match and person match before storing.
-6. **Phone:** Search company directory and speaker bios (see lead-enrich skill for full query list). Validate before storing.
+5. **Apollo Enrichment:** Batch leads via `apollo_bulk_enrich` (groups of up to 10) with first_name, last_name, organization_name, domain (if known), linkedin_url (if known)
+6. Based on results:
+   - **`deliver: true`** → `leads_upsert` with email + phone + status `"new"`, include in reply CSV
+   - **`status: "awaiting_phone"`** → `leads_upsert` with email + status `"awaiting_phone"`. Phone will arrive via webhook and Darryl will be notified automatically.
+   - **`status: "no_email"` or `"no_match"`** → web search fallback (see lead-enrich skill for queries). Deliver only if BOTH email and phone found.
+   - **`status: "budget_exhausted"`** → web search fallback for both email and phone
 
 ## Step 4: Store Leads
 
-Call `leads_upsert` for each lead. Set source info to reference the newsletter:
+Call `leads_upsert` for each lead. Set status based on contact info:
+
+- `"new"` — both email AND phone confirmed
+- `"awaiting_phone"` — email found, phone pending (async or web search)
+- `"needs_human_review"` — no contact info found
+
+Set source info to reference the newsletter:
 
 ```json
 {
@@ -75,7 +94,7 @@ Call `leads_upsert` for each lead. Set source info to reference the newsletter:
 
 Send a summary email back to Darryl using `email_send`:
 
-**Subject:** `Newsletter Processed — [N] Leads Extracted from [Newsletter Name]`
+**Subject:** `Newsletter Processed — [N] Complete Leads from [Newsletter Name]`
 **Body:**
 
 ```
@@ -83,22 +102,22 @@ I processed the [Newsletter Name] digest you forwarded ([date]).
 
 Results:
 - Total people mentioned: [N]
-- P&C target leads stored: [N]
+- Complete leads (email + phone): [N] — see attached CSV
+- Phone lookup in progress: [N] — you'll receive each automatically within ~15 minutes
 - Non-P&C or non-target skipped: [N]
 - Needs human review: [N]
 
-Leads Stored:
-1. [Name] — [Title] @ [Company] ✓
-2. [Name] — [Title] @ [Company] ✓
-3. [Name] — [Title] @ [Company] ⚠️ needs review (uncertain P&C relevance)
+Complete Leads:
+1. [Name] — [Title] @ [Company] (email + phone confirmed)
+2. [Name] — [Title] @ [Company] (email + phone confirmed)
 ...
 
 Skipped (non-P&C or non-target title):
 - [Name] — [Title] @ [Company] (reason: life insurance only)
 ...
-
-All leads have been added to your database. Use "export my leads" to get an updated CSV.
 ```
+
+Attach CSV with `email_send_csv` containing ONLY the complete leads (both email and phone confirmed).
 
 ## Edge Cases
 

@@ -57,105 +57,63 @@ Infer from title and company context:
 - Head of Development / CDO → "business development"
 - Claims VP → "claims"
 
-### Email Address
+### Email + Phone — Apollo Enrichment (Primary)
 
-Run these searches in order, stopping when a verified email is found:
+Before running manual web searches for email and phone, use Apollo as the primary enrichment source:
 
-1. **Company team/leadership page:**
+1. **Check current data** — does the lead already have both email AND phone?
+   - Yes → skip Apollo, report "already fully enriched"
+   - Has email, no phone, status `"awaiting_phone"` → check if webhook has delivered (lead may have been promoted to `"new"` already). If still pending < 2h, tell Darryl "phone lookup in progress, will deliver automatically." If pending >= 2h, continue to web search fallback below.
+   - Missing email or phone → continue to step 2
 
-   ```
-   web_search: "<company>" "leadership" OR "our team" OR "executive team"
-   ```
+2. **Check budget** — call `apollo_usage` to verify sync credits remain
 
-   If found, `web_fetch` the page and look for the person by name. Company team pages are the highest-yield source for executive email addresses.
+3. **Call `apollo_enrich`** with first_name, last_name, organization_name, domain (if known), linkedin_url (if known), internal_lead_id (the lead's ID from leads_search)
 
-2. **Direct name + email search:**
+4. **Handle results:**
+   - **`deliver: true`** (both email + phone found) → `leads_upsert` with email + phone + status `"new"`. Email Darryl immediately with the complete lead.
+   - **`status: "awaiting_phone"`** (email found, async phone hunt triggered) → `leads_upsert` with email + status `"awaiting_phone"`. Tell Darryl: "Found email for [Name]. Phone lookup in progress — you'll receive the complete lead automatically when confirmed (usually within 15 minutes)."
+   - **`status: "no_email"` or `"no_match"`** → continue to manual web search below
+   - **`status: "budget_exhausted"`** → continue to manual web search below
 
-   ```
-   web_search: "<full name>" "<company>" email
-   ```
+### Email + Phone — Web Search Fallback
 
-3. **Industry directories and conference bios:**
+Only used when Apollo couldn't find data. Run these searches:
 
-   ```
-   web_search: "<full name>" email site:rims.org OR site:cpcusociety.org OR site:insurancejournal.com
-   web_search: "<full name>" "<company>" "speaker" OR "panelist" OR "presenter" email
-   ```
+**Email** (in order, stop when found):
 
-4. **Press releases with media contacts:**
+1. Company team/leadership page: `web_search: "<company>" "leadership" OR "our team"`
+2. Direct search: `web_search: "<full name>" "<company>" email`
+3. Industry directories: `web_search: "<full name>" email site:rims.org OR site:ambest.com`
+4. Press releases: `web_search: "<full name>" "<company>" "media contact" email`
 
-   ```
-   web_search: "<full name>" "<company>" "media contact" OR "press contact" OR "for more information"
-   ```
+**Phone** (in order, stop when found):
 
-5. **Professional association and regulatory directories:**
-   ```
-   web_search: "<full name>" email site:naic.org OR site:ambest.com
-   ```
+1. Company directory: `web_search: "<full name>" "<company>" phone OR "direct line"`
+2. Speaker bios: `web_search: "<full name>" "<company>" "speaker" phone`
+3. Industry directories: `web_search: "<full name>" phone site:ambest.com OR site:naic.org`
 
-For any email found, validate before storing:
+**Validate** any contact details found via web search:
 
-- The email appears on a page that names the same person at the same company
-- The email domain matches the company's known domain (not a personal Gmail/Yahoo)
-- It is a personal business email, not a generic address (skip info@, contact@, hr@, media@)
+- Email domain must match the company's domain (not personal Gmail/Yahoo)
+- Skip generic addresses (info@, contact@, hr@, media@)
+- Phone must be a direct/personal number, not a main switchboard
 - Record the source URL in the `sources` array
-
-**Never** guess email patterns (e.g., firstname.lastname@company.com). **Never** fabricate.
-
-### Phone Number
-
-Run these searches, stopping when a verified number is found:
-
-1. **Company directory or team page** (often the same page found during email search):
-
-   ```
-   web_search: "<full name>" "<company>" phone OR "direct line" OR "contact"
-   ```
-
-2. **Conference speaker bios:**
-
-   ```
-   web_search: "<full name>" "<company>" "speaker" phone
-   ```
-
-3. **Industry directories:**
-   ```
-   web_search: "<full name>" phone site:ambest.com OR site:naic.org
-   web_search: "<company>" "<full name>" directory phone
-   ```
-
-For any phone number found, validate before storing:
-
-- The number appears on a page that names the same person at the same company
-- It is a direct/personal number, not a main switchboard or general company line
-- Record the source URL in the `sources` array
-
-**Never** guess or fabricate phone numbers.
+- **Never** guess patterns or fabricate contact details
 
 ## Step 3: Update the Lead
 
-Call `leads_upsert` with the same identifying fields (name, company, title, source_published_date) plus the newly found data. The dedup logic will merge the update into the existing record.
+Call `leads_upsert` with the newly found data. The dedup logic merges into the existing record.
 
-Add any new sources found during enrichment:
-
-```json
-{
-  "sources": [
-    {
-      "source_url": "https://linkedin.com/in/janesmith",
-      "source_label": "LinkedIn Profile"
-    },
-    {
-      "source_url": "https://chubb.com/about/leadership",
-      "source_label": "Company Leadership Page (email, phone)"
-    }
-  ]
-}
-```
+**Critical:** Only set `status_pipeline: "new"` if BOTH email AND phone are now populated. If only one was found, set `"awaiting_phone"` (email only) or `"needs_human_review"` (phone only or neither).
 
 ## Step 4: Report Back
 
-If Darryl asked for this enrichment directly, reply via `email_send` with what was found and updated. Note any fields that couldn't be found.
+If Darryl asked for this enrichment directly:
+
+- **Both email + phone found** → reply via `email_send` with the complete lead details
+- **Email found, phone pending** → reply: "Found email for [Name]. Phone lookup in progress — I'll send the complete lead as soon as it's confirmed."
+- **Neither found** → reply with what data was gathered (LinkedIn, company HQ, geography) and note that contact details couldn't be verified from available sources
 
 ## Compliance Reminders
 

@@ -46,6 +46,10 @@ services:
         sync: false
       - key: GOG_KEYRING_TOKEN_EMMA_DEFAULT
         sync: false
+      - key: APOLLO_API_KEY
+        sync: false
+      - key: APOLLO_WEBHOOK_SECRET
+        generateValue: true
     disk:
       name: openclaw-data
       mountPath: /data

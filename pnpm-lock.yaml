@@ -272,6 +272,16 @@ importers:
 
   extensions/copilot-proxy: {}
 
+  extensions/darryl-apollo:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 0.34.48
+        version: 0.34.48
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/darryl-email:
     dependencies:
       '@sinclair/typebox':

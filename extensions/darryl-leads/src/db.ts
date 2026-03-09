@@ -1,12 +1,13 @@
 import fs from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
 
 // Pipeline status priority — higher index = more advanced. Upserts never regress.
 const STATUS_PRIORITY: Record<string, number> = {
+  awaiting_phone: -1, // Below "new" so upsert with "new" can promote from "awaiting_phone"
   new: 0,
   needs_human_review: 1,
   queued_for_outreach: 2,
@@ -106,7 +107,7 @@ const MIGRATIONS = [
     functional_focus TEXT,
     notes TEXT,
     status_pipeline TEXT NOT NULL DEFAULT 'new'
-      CHECK (status_pipeline IN ('new','queued_for_outreach','contacted','in_conversation','do_not_contact','needs_human_review')),
+      CHECK (status_pipeline IN ('new','awaiting_phone','queued_for_outreach','contacted','in_conversation','do_not_contact','needs_human_review')),
     do_not_contact_reason TEXT,
     first_seen_at TEXT NOT NULL,
     last_verified_at TEXT NOT NULL,
@@ -142,6 +143,102 @@ const MIGRATIONS = [
   );`,
 ];
 
+// v2: widen status_pipeline CHECK to include 'awaiting_phone' (SQLite requires table rebuild).
+// This is a function migration because SQLite can't ALTER CHECK constraints — we must
+// conditionally rebuild the table, which requires logic that pure SQL can't express.
+function migrateV2AddAwaitingPhone(db: InstanceType<typeof DatabaseSync>): void {
+  // Idempotency marker — skip if already applied
+  const marker = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='_migration_v2_done'")
+    .get();
+  if (marker) return;
+
+  // Check if the existing CHECK already includes 'awaiting_phone' (new DB from v1)
+  const tableInfo = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='leaders'")
+    .get() as { sql: string } | undefined;
+
+  if (!tableInfo) return; // Table doesn't exist yet — v1 will create it with the correct CHECK
+
+  if (tableInfo.sql.includes("awaiting_phone")) {
+    // Already has the correct CHECK (created fresh with updated v1). Just mark done.
+    db.exec(
+      "CREATE TABLE _migration_v2_done (v INTEGER); INSERT INTO _migration_v2_done VALUES (1);",
+    );
+    return;
+  }
+
+  // Rebuild: create new table with updated CHECK → copy data → swap (atomic via transaction)
+  db.exec(`
+    BEGIN;
+    CREATE TABLE leaders_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      full_name TEXT NOT NULL,
+      current_title TEXT NOT NULL,
+      current_company TEXT NOT NULL,
+      company_hq_address TEXT,
+      email_address TEXT,
+      mobile_phone TEXT,
+      linkedin_url TEXT NOT NULL,
+      source_published_date TEXT NOT NULL,
+      move_effective_date TEXT,
+      move_type TEXT NOT NULL DEFAULT 'unspecified'
+        CHECK (move_type IN ('new_employer','internal_promotion','lateral_move','unspecified')),
+      geography TEXT,
+      functional_focus TEXT,
+      notes TEXT,
+      status_pipeline TEXT NOT NULL DEFAULT 'new'
+        CHECK (status_pipeline IN ('new','awaiting_phone','queued_for_outreach','contacted','in_conversation','do_not_contact','needs_human_review')),
+      do_not_contact_reason TEXT,
+      first_seen_at TEXT NOT NULL,
+      last_verified_at TEXT NOT NULL,
+      last_contacted_at TEXT,
+      contact_count INTEGER NOT NULL DEFAULT 0,
+      next_follow_up TEXT,
+      normalized_name TEXT NOT NULL GENERATED ALWAYS AS (lower(trim(full_name))) STORED,
+      normalized_company TEXT NOT NULL GENERATED ALWAYS AS (lower(replace(trim(current_company), '.', ''))) STORED
+    );
+
+    INSERT INTO leaders_v2 (
+      id, full_name, current_title, current_company, company_hq_address,
+      email_address, mobile_phone, linkedin_url, source_published_date,
+      move_effective_date, move_type, geography, functional_focus, notes,
+      status_pipeline, do_not_contact_reason, first_seen_at, last_verified_at,
+      last_contacted_at, contact_count, next_follow_up
+    )
+    SELECT
+      id, full_name, current_title, current_company, company_hq_address,
+      email_address, mobile_phone, linkedin_url, source_published_date,
+      move_effective_date, move_type, geography, functional_focus, notes,
+      status_pipeline, do_not_contact_reason, first_seen_at, last_verified_at,
+      last_contacted_at, contact_count, next_follow_up
+    FROM leaders;
+
+    DROP TABLE leaders;
+    ALTER TABLE leaders_v2 RENAME TO leaders;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_leaders_dedup
+      ON leaders (normalized_name, normalized_company, current_title, source_published_date);
+    CREATE INDEX IF NOT EXISTS idx_leaders_recent ON leaders (source_published_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_leaders_pipeline ON leaders (status_pipeline);
+    CREATE INDEX IF NOT EXISTS idx_leaders_company ON leaders (normalized_company);
+
+    CREATE TABLE _migration_v2_done (v INTEGER);
+    INSERT INTO _migration_v2_done VALUES (1);
+    COMMIT;
+  `);
+}
+
+// Also clean up the broken v2 marker table if it exists from the previous stub
+function cleanupBrokenV2Stub(db: InstanceType<typeof DatabaseSync>): void {
+  const stub = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='_leaders_v2_check'")
+    .get();
+  if (stub) {
+    db.exec("DROP TABLE _leaders_v2_check;");
+  }
+}
+
 export class LeadsDB {
   private db: InstanceType<typeof DatabaseSync>;
 
@@ -161,6 +258,9 @@ export class LeadsDB {
     for (const sql of MIGRATIONS) {
       this.db.exec(sql);
     }
+    // Function migrations (can't be expressed as pure SQL)
+    cleanupBrokenV2Stub(this.db);
+    migrateV2AddAwaitingPhone(this.db);
   }
 
   upsert(lead: LeadInput): { id: number; action: "created" | "updated" } {
@@ -177,18 +277,16 @@ export class LeadsDB {
            AND current_title = ?
            AND source_published_date = ?`,
       )
-      .get(
-        lead.full_name,
-        lead.current_company,
-        lead.current_title,
-        lead.source_published_date,
-      ) as { id: number; status_pipeline: string; move_type: string } | undefined;
+      .get(lead.full_name, lead.current_company, lead.current_title, lead.source_published_date) as
+      | { id: number; status_pipeline: string; move_type: string }
+      | undefined;
 
     if (existing) {
       // Never regress pipeline status — keep whichever is more advanced
       const existingPriority = STATUS_PRIORITY[existing.status_pipeline] ?? 0;
       const incomingPriority = STATUS_PRIORITY[statusPipeline] ?? 0;
-      const finalStatus = incomingPriority > existingPriority ? statusPipeline : existing.status_pipeline;
+      const finalStatus =
+        incomingPriority > existingPriority ? statusPipeline : existing.status_pipeline;
 
       // Never overwrite a specific move_type with "unspecified"
       const finalMoveType =

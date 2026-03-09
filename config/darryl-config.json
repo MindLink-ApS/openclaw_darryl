@@ -86,6 +86,19 @@
           "autoCapture": true,
           "openaiApiKey": "${OPENAI_API_KEY}"
         }
+      },
+      "darryl-apollo": {
+        "enabled": true,
+        "config": {
+          "apiKey": "${APOLLO_API_KEY}",
+          "syncMonthlyLimit": 100,
+          "asyncPhoneMonthlyLimit": 50,
+          "webhookBaseUrl": "https://openclaw-darryl.onrender.com",
+          "webhookSecret": "${APOLLO_WEBHOOK_SECRET}",
+          "hooksToken": "${HOOKS_TOKEN}",
+          "dataDir": "/data/.openclaw/darryl/apollo",
+          "leadsDbPath": "/data/.openclaw/darryl/leads.db"
+        }
       }
     }
   },

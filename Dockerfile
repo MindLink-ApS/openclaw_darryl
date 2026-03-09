@@ -36,6 +36,7 @@ COPY --chown=node:node ui/package.json ./ui/package.json
 COPY --chown=node:node extensions/darryl-email/package.json ./extensions/darryl-email/package.json
 COPY --chown=node:node extensions/darryl-leads/package.json ./extensions/darryl-leads/package.json
 COPY --chown=node:node extensions/darryl-mem0/package.json ./extensions/darryl-mem0/package.json
+COPY --chown=node:node extensions/darryl-apollo/package.json ./extensions/darryl-apollo/package.json
 COPY --chown=node:node patches ./patches
 COPY --chown=node:node scripts ./scripts
 
