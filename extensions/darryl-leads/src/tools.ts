@@ -54,6 +54,7 @@ type SearchParams = {
   date_to?: string;
   limit?: number;
   offset?: number;
+  require_contact?: boolean;
 };
 
 type UpdatePipelineParams = {
@@ -66,6 +67,7 @@ type ExportCsvParams = {
   status?: string;
   date_from?: string;
   date_to?: string;
+  require_contact?: boolean;
 };
 
 export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
@@ -77,6 +79,8 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
         "Insert or update a P&C insurance executive lead. " +
         "Deduplicates on name + company + title + source date. " +
         "Pipeline status never regresses (e.g., 'contacted' won't revert to 'new'). " +
+        "Delivery gate: status 'new' requires both email AND phone — automatically " +
+        "downgrades to 'awaiting_phone' or 'needs_human_review' if missing. " +
         "Optionally attach source URLs (duplicates auto-ignored).",
       parameters: LeadUpsertParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
@@ -115,7 +119,8 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
       label: "Leads Search",
       description:
         "Search P&C executive leads by name, company, pipeline status, or date range. " +
-        "Returns paginated results (default limit 50).",
+        "Returns paginated results (default limit 50). " +
+        "Set require_contact=true to only return leads with both email AND phone.",
       parameters: LeadSearchParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
         const params = rawParams as SearchParams;
@@ -160,7 +165,9 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
       label: "Leads Export CSV",
       description:
         "Export filtered leads to a CSV file. Returns the file path. " +
-        "Filters: status, date_from, date_to.",
+        "By default, only exports leads with both email AND phone (delivery gate). " +
+        "Set require_contact=false to include all leads. " +
+        "Filters: status, date_from, date_to, require_contact.",
       parameters: LeadExportCsvParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
         const params = rawParams as ExportCsvParams;
@@ -168,6 +175,7 @@ export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
           status: params.status,
           date_from: params.date_from,
           date_to: params.date_to,
+          require_contact: params.require_contact ?? true,
         });
         const csv = generateCsv(leads);
 

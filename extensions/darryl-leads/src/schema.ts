@@ -80,6 +80,11 @@ export const LeadSearchParams = Type.Object(
     offset: Type.Optional(
       Type.Number({ description: "Offset for pagination (default 0)", minimum: 0 }),
     ),
+    require_contact: Type.Optional(
+      Type.Boolean({
+        description: "If true, only return leads with both email AND phone populated",
+      }),
+    ),
   },
   { additionalProperties: false },
 );
@@ -120,6 +125,13 @@ export const LeadExportCsvParams = Type.Object(
     ),
     date_to: Type.Optional(
       Type.String({ description: "Filter leads seen on or before this date (YYYY-MM-DD)" }),
+    ),
+    require_contact: Type.Optional(
+      Type.Boolean({
+        description:
+          "Only export leads with both email AND phone (delivery gate). Defaults to true.",
+        default: true,
+      }),
     ),
   },
   { additionalProperties: false },

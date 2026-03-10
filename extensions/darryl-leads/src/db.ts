@@ -80,6 +80,7 @@ export type SearchFilters = {
   date_to?: string;
   limit?: number;
   offset?: number;
+  require_contact?: boolean;
 };
 
 export type LeadStats = {
@@ -263,30 +264,43 @@ export class LeadsDB {
     migrateV2AddAwaitingPhone(this.db);
   }
 
-  upsert(lead: LeadInput): { id: number; action: "created" | "updated" } {
+  upsert(lead: LeadInput): { id: number; action: "created" | "updated"; status_pipeline: string } {
     const now = new Date().toISOString();
     const moveType = lead.move_type ?? "unspecified";
-    const statusPipeline = lead.status_pipeline ?? "new";
+    let statusPipeline = lead.status_pipeline ?? "new";
 
     // Try to find existing lead by dedup key
     const existing = this.db
       .prepare(
-        `SELECT id, status_pipeline, move_type FROM leaders
+        `SELECT id, status_pipeline, move_type, email_address, mobile_phone FROM leaders
          WHERE normalized_name = lower(trim(?))
            AND normalized_company = lower(replace(trim(?), '.', ''))
            AND current_title = ?
            AND source_published_date = ?`,
       )
       .get(lead.full_name, lead.current_company, lead.current_title, lead.source_published_date) as
-      | { id: number; status_pipeline: string; move_type: string }
+      | {
+          id: number;
+          status_pipeline: string;
+          move_type: string;
+          email_address: string | null;
+          mobile_phone: string | null;
+        }
       | undefined;
 
     if (existing) {
       // Never regress pipeline status — keep whichever is more advanced
       const existingPriority = STATUS_PRIORITY[existing.status_pipeline] ?? 0;
       const incomingPriority = STATUS_PRIORITY[statusPipeline] ?? 0;
-      const finalStatus =
+      let finalStatus =
         incomingPriority > existingPriority ? statusPipeline : existing.status_pipeline;
+
+      // Enforce delivery gate: "new" requires both email AND phone
+      const resultingEmail = lead.email_address ?? existing.email_address;
+      const resultingPhone = lead.mobile_phone ?? existing.mobile_phone;
+      if (finalStatus === "new" && (!resultingEmail || !resultingPhone)) {
+        finalStatus = resultingEmail ? "awaiting_phone" : "needs_human_review";
+      }
 
       // Never overwrite a specific move_type with "unspecified"
       const finalMoveType =
@@ -324,7 +338,12 @@ export class LeadsDB {
           now,
           existing.id,
         );
-      return { id: existing.id, action: "updated" };
+      return { id: existing.id, action: "updated", status_pipeline: finalStatus };
+    }
+
+    // Enforce delivery gate: "new" requires both email AND phone
+    if (statusPipeline === "new" && (!lead.email_address || !lead.mobile_phone)) {
+      statusPipeline = lead.email_address ? "awaiting_phone" : "needs_human_review";
     }
 
     const result = this.db
@@ -356,7 +375,11 @@ export class LeadsDB {
         now,
       );
 
-    return { id: Number(result.lastInsertRowid), action: "created" };
+    return {
+      id: Number(result.lastInsertRowid),
+      action: "created",
+      status_pipeline: statusPipeline,
+    };
   }
 
   getById(id: number): (Lead & { sources: LeadSource[] }) | null {
@@ -407,6 +430,10 @@ export class LeadsDB {
     if (filters.date_to) {
       conditions.push("first_seen_at <= ?");
       params.push(filters.date_to + "T23:59:59.999Z");
+    }
+    if (filters.require_contact) {
+      conditions.push("email_address IS NOT NULL AND email_address != ''");
+      conditions.push("mobile_phone IS NOT NULL AND mobile_phone != ''");
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
