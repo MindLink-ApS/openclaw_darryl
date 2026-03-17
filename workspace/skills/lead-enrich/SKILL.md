@@ -92,14 +92,33 @@ Only used when Apollo couldn't find data. Run these searches:
 1. Company directory: `web_search: "<full name>" "<company>" phone OR "direct line"`
 2. Speaker bios: `web_search: "<full name>" "<company>" "speaker" phone`
 3. Industry directories: `web_search: "<full name>" phone site:ambest.com OR site:naic.org`
+4. Office direct line: `web_search: "<full name>" "<company>" "direct" OR "office" OR "ext" phone`
+5. Company main office for lead's city/geography:
+   ```
+   web_search: "<company>" "<city>" OR "<state>" office phone number
+   web_search: "<company>" "contact us" OR "locations"
+   ```
+   Use `web_fetch` on the company contact page to find the relevant office number. Accept main office lines as a fallback — note the type in `notes` (e.g., `"phone: main office (Nashville)"`).
+
+**Email Pattern Inference** (when all web searches above fail):
+
+If no email was found via web search or Apollo, attempt to infer one from same-company leads:
+
+1. Call `leads_search` with `company: "<company name>"` to find other leads at the same company
+2. Collect all populated `email_address` values that are NOT already suggested
+3. Detect the naming pattern (e.g., `first.last@domain.com`, `flast@domain.com`)
+4. If at least 1 example exists, apply the pattern to generate a suggested email
+5. Store the suggested email in `email_address` and append to `notes`: `"email suggested based on company pattern (first.last@domain.com) — verify before outreach"`
+6. If no same-company emails exist, try to find the company domain via `web_search: "<company>" insurance email "@"` and note it in `notes` without generating an email
 
 **Validate** any contact details found via web search:
 
 - Email domain must match the company's domain (not personal Gmail/Yahoo)
 - Skip generic addresses (info@, contact@, hr@, media@)
-- Phone must be a direct/personal number, not a main switchboard
+- For phone: prefer direct/personal numbers, but accept office and main company lines as fallbacks
 - Record the source URL in the `sources` array
-- **Never** guess patterns or fabricate contact details
+- **Never** fabricate phone numbers — only use numbers found on actual web pages
+- Suggested emails must always be noted in `notes` as inferred
 
 ## Step 3: Update the Lead
 

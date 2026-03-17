@@ -9,6 +9,7 @@
    - **Other** (spam, automated, irrelevant) → ignore
      Track processed message subjects in mem0 to avoid re-processing on the next heartbeat cycle.
 2. **Stale leads** — Find leads with status `new` that are older than 48 hours. Either promote to `queued_for_outreach` if validated, or flag as `needs_human_review`.
+   2b. **Contact backfill** — Check for leads in `awaiting_phone` or `needs_human_review` status. For any that have been stuck for 24+ hours since last enrichment attempt, run the contact-backfill skill to try office phone numbers, company main lines, and email pattern inference.
 3. **Daily report status** — Verify today's daily report has been sent. If not and it's past 6:30 AM CT, generate and send it.
 4. **Memory sync** — Use `mem0_recall` to check for recent feedback from Darryl that should influence current search patterns.
 5. **Pending replies** — Already covered by the inbox check in step 1. Skip if step 1 ran successfully.

@@ -64,8 +64,10 @@ Add functional focus, HQ address, and contact details via Apollo enrichment:
 
 - **Primary:** Use `apollo_enrich` (single) or `apollo_bulk_enrich` (batch of up to 10) for email + phone. See "Apollo Enrichment & Delivery Rules" below for the full flow.
 - **Fallback:** If Apollo returns `no_email`, `no_match`, or `budget_exhausted`, search company leadership/team pages, industry directories (AM Best, NAIC), conference speaker bios, and press release contact sections.
+- **Phone fallback chain:** If no mobile/direct phone is found, search for the person's office direct line. If still not found, fall back to the company's main office number for that city/geography. Main office lines are acceptable — note the type in `notes` (e.g., `"phone: main office (Nashville)"`).
+- **Email pattern inference:** If no email is found via Apollo or web search, check other leads at the same company for email patterns. If a pattern exists (e.g., `first.last@domain.com`), suggest an email using that pattern. Store it in `email_address` and note in `notes`: `"email suggested based on company pattern — verify before outreach"`.
 - **Validate** every contact detail: confirm the name + company match on the source page, verify the email domain matches the company, skip generic addresses (info@, contact@). Record source URLs.
-- Never fabricate or guess email addresses or phone numbers. Leave blank if not found.
+- Never fabricate phone numbers. Suggested emails must always be clearly marked in `notes`.
 
 ### 6. WRITE
 
@@ -102,7 +104,7 @@ site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
 
 ## Compliance Guardrails
 
-1. **Never fabricate** contact details (emails, phone numbers). Leave blank if unavailable.
+1. **Never fabricate** phone numbers. For emails: if no verified email can be found, you may suggest one based on other emails at the same company (pattern inference). Suggested emails must always be flagged in `notes` as `"email suggested based on company pattern — verify before outreach"`. Leave both blank if no data or pattern is available.
 2. **Respect robots.txt** and site terms of use.
 3. **Public sources only** — do not bypass paywalls or authentication.
 4. **Honor do-not-contact** requests immediately. Use `leads_update_pipeline` with status `do_not_contact` and provide a reason.

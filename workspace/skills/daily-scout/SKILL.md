@@ -87,6 +87,7 @@ Before enriching new leads, check all leads stuck in `awaiting_phone` status:
    - If the webhook already delivered the phone (lead now has `mobile_phone` populated and status was promoted to `"new"` by the webhook handler) → it was already sent to Darryl individually. Note as "(sent earlier today)" for the daily report recap.
    - If still awaiting AND pending < 2 hours → leave alone, webhook may still arrive
    - If pending >= 2 hours or expired → web search fallback for phone:
+
      ```
      web_search: "<full name>" "<company>" phone OR "direct line" OR "contact"
      web_search: "<company>" "leadership" OR "directory" phone
@@ -132,6 +133,24 @@ For each enriched lead, call `leads_upsert` with all available fields. Set `stat
 - `"needs_human_review"` if neither contact method found
 
 **Never fabricate** email addresses or phone numbers. Always record the source URL where a contact detail was found.
+
+## Step 5.5: Contact Backfill Pass
+
+After enriching new leads, run a backfill pass on ALL existing incomplete leads (not just today's):
+
+1. Call `leads_search` with `status: "awaiting_phone"` and `leads_search` with `status: "needs_human_review"`
+2. For each lead still missing a phone number:
+   - Search for their office direct line: `web_search: "<full name>" "<company>" "direct" OR "office" phone`
+   - If not found, search for the company's main office number in their city: `web_search: "<company>" "<city>" office phone number`
+   - Accept main office lines — note type in `notes` (e.g., `"phone: main office (Nashville)"`)
+3. For each lead still missing an email:
+   - Run standard web search for their email
+   - If not found, check other leads at the same company (`leads_search` with `company: "<company>"`) for email patterns
+   - If a pattern exists (e.g., `first.last@domain.com`), suggest an email using that pattern
+   - Store in `email_address`, append to `notes`: `"email suggested based on company pattern (first.last@domain.com) — verify before outreach"`
+4. Update each lead via `leads_upsert` — if both email and phone are now populated, status advances to `"new"` (deliverable)
+
+This backfill pass ensures older leads don't languish with missing contact info.
 
 ## Step 6: Generate Report
 
