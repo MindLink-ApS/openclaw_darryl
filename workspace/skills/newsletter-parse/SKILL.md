@@ -36,7 +36,8 @@ For each person extracted:
 
 1. Is the company a P&C insurer, broker, or reinsurer? If unclear, search: `web_search` for `"<company>" "property casualty" OR "P&C" insurance`
 2. Is the title a target title? (CDO, VP, Regional Director, AVP, BD, Underwriter)
-3. If both are uncertain, mark as `needs_human_review` but still store the lead
+3. Is the person based in the United States? Check their geography, company office location, or role description. Anyone based outside the US (including US companies' international offices like London, Bermuda, Singapore) should be excluded. If geography is ambiguous from the newsletter text alone, flag for verification during enrichment (Step 3).
+4. If all are uncertain, mark as `needs_human_review` but still store the lead
 
 ## Step 2.5: Resolve Pending Leads
 
@@ -105,6 +106,7 @@ Results:
 - Complete leads (email + phone): [N] — see attached CSV
 - Phone lookup in progress: [N] — you'll receive each automatically within ~15 minutes
 - Non-P&C or non-target skipped: [N]
+- Non-US eliminated: [N]
 - Needs human review: [N]
 
 Complete Leads:
@@ -125,3 +127,4 @@ Attach CSV with `email_send_csv` containing ONLY the complete leads (both email 
 - **PDF attachment:** Note that you cannot parse PDF attachments directly. Ask Darryl to copy-paste the text content.
 - **Ambiguous roles:** If a title could be either P&C or life/health, store with `needs_human_review` and note the ambiguity.
 - **Duplicate leads:** The `leads_upsert` tool handles deduplication automatically. Note in the reply how many were already in the database.
+- **International list:** If the entire list appears to be non-US (e.g., EMEA awards, London Market), note this to Darryl and suggest the US equivalent if one exists. Do not process non-US names as leads.

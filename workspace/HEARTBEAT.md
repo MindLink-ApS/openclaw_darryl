@@ -3,10 +3,16 @@
 ## Every Cycle
 
 1. **Inbox check** — Call `email_inbox_check` to list recent unread emails. For each unread email:
-   - **Forwarded newsletter** (from Darryl, contains "Comings & Goings" or similar digest) → process with the `newsletter-parse` skill
-   - **BCC'd outreach** (from Darryl, addressed to a lead) → record via `leads_record_contact`, advance status to `contacted`, store context in mem0
-   - **External reply** (from someone outside Trusted Contacts) → follow the reply handling protocol in SOUL.md (acknowledge, notify Darryl, update lead)
-   - **Other** (spam, automated, irrelevant) → ignore
+   - **Forwarded newsletter** (from Darryl, contains "Comings & Goings", "People on the Move", or similar digest content) → process with the `newsletter-parse` skill
+   - **BCC'd outreach** (from Darryl, addressed to a lead, Emma is in BCC) → record via `leads_record_contact`, advance status to `contacted`, store context in mem0
+   - **Direct instruction** (from Darryl, contains a request or task — e.g., "please send me...", "can you find...", "search for...", a list of names to look up, feedback on reports, or any reply to a previous Emma email) → parse the request and execute:
+     - If it's a list of names/companies: use the `newsletter-parse` skill to extract and enrich them
+     - If it's a request for data ("send me all leads", "consolidated spreadsheet"): use `leads_export_csv` and `email_send_csv`
+     - If it's feedback ("consolidate emails", "don't send me X", "eliminate Y from the list"): use the `feedback` skill to store the preference and confirm via email
+     - If it's an approval or confirmation ("Yes, please do..."): execute the action Emma previously proposed
+     - If unclear, reply asking for clarification — never ignore a Darryl email
+   - **External reply** (from someone outside Trusted Contacts) → follow the reply handling protocol in SOUL.md
+   - **Other** (spam, automated, irrelevant — NOT from Darryl or trusted contacts) → ignore
      Track processed message subjects in mem0 to avoid re-processing on the next heartbeat cycle.
 2. **Stale leads** — Find leads with status `new` that are older than 48 hours. Either promote to `queued_for_outreach` if validated, or flag as `needs_human_review`.
    2b. **Contact backfill** — Check for leads in `awaiting_phone` or `needs_human_review` status. For any that have been stuck for 24+ hours since last enrichment attempt, run the contact-backfill skill to try office phone numbers, company main lines, and email pattern inference.

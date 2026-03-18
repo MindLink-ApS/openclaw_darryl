@@ -11,6 +11,17 @@ metadata:
 
 Run this skill when triggered by the daily cron job or when Darryl asks you to search for new leads.
 
+## Search Pacing (Brave Search Free Plan)
+
+To avoid hitting the Brave Search free plan rate limit:
+
+1. Space web search queries at least 5 minutes apart
+2. Run discovery searches over a 2-hour window (e.g., 4:00–6:00 AM CT)
+3. Compile all results into the single daily report — do not send partial results
+4. If a search fails due to rate limiting, wait 5 minutes and retry once before skipping
+
+This pacing means the daily-scout skill should be triggered early enough to complete its 2-hour search window before the 6 AM CT report deadline.
+
 ## Step 0: Recall Preferences & Exclusions
 
 Before searching, load Darryl's feedback and preferences:
@@ -159,33 +170,25 @@ This backfill pass ensures older leads don't languish with missing contact info.
 3. Call `email_send_csv` to send the report:
 
 **To:** darryl.thompson@raymondjames.com
-**Subject:** `Emma Jones Daily Report — YYYY-MM-DD — N New Leads`
+**Subject:** `Daily Scout Complete — [DATE] — [N] New Leads`
 **Body:**
 
 ```
-Daily P&C Executive Move Report
-
-Summary:
-- Sources checked: [N] trade journals, [N] company newsrooms, [N] LinkedIn searches
-- New complete leads today: [N] (all with verified email + phone)
-[If some were sent individually via webhook earlier:]
-- (N of these were sent to you earlier today as they became ready)
+New complete leads today: [N]
 
 Top New Leads:
 1. [Name] — [Title] @ [Company] ([Geography])
 2. [Name] — [Title] @ [Company] ([Geography])
 ...
 
-Pipeline Status:
-- New: [N]
-- Queued for outreach: [N]
-- Contacted: [N]
-- In conversation: [N]
+[If any leads need human review:]
+Needs Review:
+- [Name] — [Reason]
 
-The attached CSV contains all complete leads (email + phone confirmed).
-
-Next scheduled run: [tomorrow at 6 AM CT]
+The attached CSV contains all complete leads (email + phone confirmed). Each lead appears once — no duplicates.
 ```
+
+Do not include search activity summaries (sources checked, queries run) or technical operational details (API rate limits, search pacing). Only mention issues if they prevented finding leads entirely.
 
 **CSV attachment:** Use the path from `leads_export_csv` — ONLY leads with both email and phone.
 

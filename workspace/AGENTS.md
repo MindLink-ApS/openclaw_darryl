@@ -114,6 +114,16 @@ site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
 
 ---
 
+## Standing Exclusions
+
+These rules apply to ALL lead discovery, newsletter parsing, and enrichment. They persist across sessions and override default behavior.
+
+1. **US-only** — Only include leads based in the United States. Eliminate anyone working outside the US, including US companies' international offices (e.g., London, Bermuda, Singapore offices of US carriers). If geography is ambiguous, check LinkedIn or company page before including.
+
+These exclusions were provided directly by Darryl. Do not remove them without his explicit instruction.
+
+---
+
 ## Darryl's Contact
 
 - **Email:** darryl.thompson@raymondjames.com
@@ -165,15 +175,15 @@ Research Associate
 
 4. Set up scheduled cron jobs using the `cron` tool (action: `add`):
 
-   **Daily Scout (6 AM CT, every day):**
+   **Daily Scout (4 AM CT, every day — 2-hour search window before 6 AM report):**
 
    ```json
    {
      "action": "add",
      "job": {
        "name": "daily-scout",
-       "schedule": { "kind": "cron", "expression": "0 6 * * *", "timezone": "America/Chicago" },
-       "message": "Run the daily-scout skill. Search all sources for new P&C executive moves, validate, enrich, store leads, and email the daily report to Darryl.",
+       "schedule": { "kind": "cron", "expression": "0 4 * * *", "timezone": "America/Chicago" },
+       "message": "Run the daily-scout skill. Space Brave Search queries 5 minutes apart over a 2-hour window. Search all sources for new P&C executive moves (US-only), validate, enrich, store leads, and email the 'Daily Scout Complete' report to Darryl at 6 AM CT.",
        "session": "isolated",
        "enabled": true
      }
@@ -261,15 +271,16 @@ If someone outside the Trusted Contacts list replies to an email Emma sent (e.g.
 
 ### Daily Report Format
 
-Subject: `Emma Jones Daily Report — [DATE] — [N] New Leads`
+Subject: `Daily Scout Complete — [DATE] — [N] New Leads`
 
 Body should include:
 
-- Summary of search activity (sources checked, queries run)
-- Number of new/updated leads
-- Top leads by relevance
+- Count of new leads found today
+- Top leads by relevance (name, title, company — brief)
 - Any leads needing human review
 - Note about attached CSV
+
+Do not include a search activity summary (sources checked, queries run). Do not mention Brave Search rate limits, API issues, or technical operational details unless they prevented finding leads entirely.
 
 ### CSV Columns
 
@@ -302,6 +313,14 @@ Use `leads_record_contact` each time Darryl contacts a lead. This tracks:
 - `next_follow_up` — scheduled follow-up date
 
 The Monday weekly report should group leads by contact count for call prioritization.
+
+### Full Pipeline Export
+
+When Darryl asks for "all leads", "consolidated spreadsheet", or "everything you have":
+
+1. Call `leads_export_csv` with no status filter — include ALL leads that have both email AND phone
+2. Send via `email_send_csv` with subject: "Full Pipeline Export — [DATE] — [N] Total Leads"
+3. In the email body, include a brief summary: total leads by status (new, contacted, in_conversation, etc.)
 
 ### Looking Up a Lead
 
@@ -396,31 +415,31 @@ Use `mem0_recall` before each interaction to load relevant context.
 ### Enrichment Flow
 
 - Every new lead gets a 1-credit sync Apollo enrichment via `apollo_enrich` (email + cached phones)
-- Both email and phone found → status `"new"`, deliver immediately in current report/email
+- Both email and phone found → status `"new"`, include in the next daily report
 - Email only, no phone → auto-trigger async mobile hunt (1 mobile credit), store lead as `"awaiting_phone"`, DO NOT deliver yet
 - Neither found → web search fallback for both, deliver only if BOTH found
 
-### Instant Delivery (phone arrives via webhook)
+### Webhook Phone Arrivals (silent storage — no outbound email)
 
-- When Apollo's webhook delivers a phone number, you will be woken automatically with a system message containing the lead's details
-- Send Darryl a brief email RIGHT NOW with the complete lead info
-- For a single lead: inline the details (name, title, company, email, phone, LinkedIn, geography). No CSV attachment.
-- For multiple leads resolving at once: one email listing all of them
-- Subject format: `"New Lead: [Name] — [Company]"` (single) or `"[N] New Leads Ready"` (batch)
-- Keep it short. Darryl can act on it right away.
+- When Apollo's webhook delivers a phone number, store it on the lead record silently
+- Update the lead status from `"awaiting_phone"` to `"new"` (now delivery-ready)
+- Do NOT send a separate email to Darryl — the lead will be included in the next Daily Scout Complete report
+- Never send "New Lead", "X New Leads Ready", or any mid-day lead notification emails
 
 ### Pending Resolution (run at start of daily-scout / newsletter-parse)
 
 - Check all `"awaiting_phone"` leads FIRST, before discovering new leads
-- Most will have already been resolved and delivered via webhook
+- Most will have already been resolved silently via webhook
 - Handle stragglers: pending >= 2 hours or failed → web search fallback for phone
-  - Found phone? Update lead, deliver immediately via `email_send`
+  - Found phone? Update lead to status `"new"` — it will appear in the next daily report
   - Not found? Set status `"needs_human_review"`, never deliver
 
 ### Daily Report
 
-- Include ALL complete leads from today (including webhook-delivered ones)
-- Mark webhook-delivered leads as "(sent earlier today)" for clarity
+- **Subject:** `Daily Scout Complete — [DATE] — [N] New Leads`
+- This is the ONLY outbound email per day (besides direct replies to Darryl's emails). Never send separate "New Lead" or "X New Leads Ready" emails.
+- Each lead must appear exactly once. Deduplicate across all sources before compiling the report.
+- Include ALL complete leads from today (discovered via search, newsletter parsing, and webhook phone arrivals)
 - CSV attached for filing/CRM import — contains ONLY leads with both email AND phone
 - Do NOT mention pending/awaiting leads in the daily report or its CSV. In direct replies to Darryl (newsletter parsing, enrichment requests), it is OK to mention that phone lookups are in progress.
 
