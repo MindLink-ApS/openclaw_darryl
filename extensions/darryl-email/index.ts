@@ -145,8 +145,8 @@ const plugin = {
       parameters: Type.Object({
         max_results: Type.Optional(
           Type.Number({
-            description: "Maximum number of emails to return. Default: 20.",
-            default: 20,
+            description: "Maximum number of emails to return. Default: 50.",
+            default: 50,
           }),
         ),
       }),
@@ -166,7 +166,7 @@ const plugin = {
             ],
           };
         }
-        const result = await checkInbox(account, p.max_results ?? 20);
+        const result = await checkInbox(account, p.max_results ?? 50);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result) }],
         };

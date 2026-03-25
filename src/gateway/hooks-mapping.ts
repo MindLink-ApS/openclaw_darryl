@@ -74,7 +74,7 @@ const hookPresetMappings: Record<string, HookMappingConfig[]> = {
       name: "Gmail",
       sessionKey: "hook:gmail:{{messages[0].id}}",
       messageTemplate:
-        "New email from {{messages[0].from}}\nSubject: {{messages[0].subject}}\n{{messages[0].snippet}}\n{{messages[0].body}}",
+        "New email notification. Process ALL messages below (there may be more than one):\n{{messages}}",
     },
   ],
 };

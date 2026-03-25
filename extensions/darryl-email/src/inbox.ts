@@ -11,7 +11,7 @@ export type InboxCheckResult = {
 
 export async function checkInbox(
   account: string,
-  maxResults: number = 20,
+  maxResults: number = 50,
 ): Promise<InboxCheckResult> {
   try {
     const { stdout, stderr } = await execFileAsync(
@@ -20,7 +20,7 @@ export async function checkInbox(
         "gmail",
         "messages",
         "search",
-        "is:unread newer_than:1d",
+        "is:unread newer_than:7d",
         "--account",
         account,
         "--max",
