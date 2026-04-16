@@ -1,7 +1,8 @@
 #!/bin/sh
-# Seed Emma's cron jobs if they don't exist.
-# Idempotent: only adds jobs that aren't already present.
-# Runs at container startup before the gateway starts.
+# Seed Emma's cron jobs at container startup.
+# - 3 recurring jobs (daily-scout, weekly-digest, monthly-report)
+# - 1 one-shot "immediate run" that fires 60 seconds after startup,
+#   runs daily-scout, emails Darryl, then self-deletes.
 
 set -e
 
@@ -10,17 +11,32 @@ JOBS_DIR="$(dirname "$JOBS_FILE")"
 
 mkdir -p "$JOBS_DIR"
 
-# If jobs.json doesn't exist, initialize it empty
-if [ ! -f "$JOBS_FILE" ]; then
-  echo '{"version":1,"jobs":[]}' > "$JOBS_FILE"
-fi
+# Compute "now + 60s" in ISO 8601 UTC
+IMMEDIATE_AT="$(date -u -d '+60 seconds' +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+60S +'%Y-%m-%dT%H:%M:%SZ')"
 
-# Check if each critical job exists by name. If missing, seed it.
-# We write the full jobs.json declaratively to guarantee all three exist.
-cat > "$JOBS_FILE" <<'EOF'
+cat > "$JOBS_FILE" <<EOF
 {
   "version": 1,
   "jobs": [
+    {
+      "id": "kickstart-run",
+      "name": "kickstart-run",
+      "enabled": true,
+      "schedule": {
+        "kind": "at",
+        "at": "${IMMEDIATE_AT}"
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "STARTUP TRIGGER. Run the daily-scout skill immediately to catch Darryl up after the outage. Search all sources for new P&C executive moves (US-only, 60-day window), validate, enrich via Apollo, store leads, and email 'Daily Scout Complete — [DATE] — [N] New Leads' to Darryl. This is a manual kick-start — do a full discovery pass even if not the usual 4 AM window. Include a brief one-line note at the top of the email: 'Back online — catching up on leads from the past 2 weeks.'"
+      },
+      "delivery": {
+        "mode": "none"
+      },
+      "deleteAfterRun": true
+    },
     {
       "id": "daily-scout",
       "name": "daily-scout",
@@ -82,4 +98,5 @@ cat > "$JOBS_FILE" <<'EOF'
 }
 EOF
 
-echo "seed-crons: 3 jobs seeded at $JOBS_FILE"
+echo "seed-crons: 4 jobs seeded at $JOBS_FILE"
+echo "seed-crons: kick-start will fire at ${IMMEDIATE_AT} (UTC)"
