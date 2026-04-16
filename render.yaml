@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: standard
     healthCheckPath: /health
-    dockerCommand: sh -c "sh /app/scripts/seed-crons.sh && node openclaw.mjs gateway --allow-unconfigured --bind lan"
+    dockerCommand: sh /app/scripts/start.sh
     envVars:
       - key: PORT
         value: "10000"

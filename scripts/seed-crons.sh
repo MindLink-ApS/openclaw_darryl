@@ -1,8 +1,8 @@
 #!/bin/sh
-# Seed Emma's cron jobs at container startup.
-# - 3 recurring jobs (daily-scout, weekly-digest, monthly-report)
-# - 1 one-shot "immediate run" that fires 60 seconds after startup,
-#   runs daily-scout, emails Darryl, then self-deletes.
+# Seed Emma's recurring cron jobs at container startup.
+# Runs BEFORE the gateway starts. Writes /data/.openclaw/cron/jobs.json
+# with the 3 recurring jobs (daily-scout, weekly-digest, monthly-report).
+# Immediate kick-start is handled by kickstart-run.sh AFTER gateway boots.
 
 set -e
 
@@ -11,32 +11,10 @@ JOBS_DIR="$(dirname "$JOBS_FILE")"
 
 mkdir -p "$JOBS_DIR"
 
-# Compute "now + 60s" in ISO 8601 UTC
-IMMEDIATE_AT="$(date -u -d '+60 seconds' +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -v+60S +'%Y-%m-%dT%H:%M:%SZ')"
-
-cat > "$JOBS_FILE" <<EOF
+cat > "$JOBS_FILE" <<'EOF'
 {
   "version": 1,
   "jobs": [
-    {
-      "id": "kickstart-run",
-      "name": "kickstart-run",
-      "enabled": true,
-      "schedule": {
-        "kind": "at",
-        "at": "${IMMEDIATE_AT}"
-      },
-      "sessionTarget": "isolated",
-      "wakeMode": "now",
-      "payload": {
-        "kind": "agentTurn",
-        "message": "STARTUP TRIGGER. Run the daily-scout skill immediately to catch Darryl up after the outage. Search all sources for new P&C executive moves (US-only, 60-day window), validate, enrich via Apollo, store leads, and email 'Daily Scout Complete — [DATE] — [N] New Leads' to Darryl. This is a manual kick-start — do a full discovery pass even if not the usual 4 AM window. Include a brief one-line note at the top of the email: 'Back online — catching up on leads from the past 2 weeks.'"
-      },
-      "delivery": {
-        "mode": "none"
-      },
-      "deleteAfterRun": true
-    },
     {
       "id": "daily-scout",
       "name": "daily-scout",
@@ -98,5 +76,4 @@ cat > "$JOBS_FILE" <<EOF
 }
 EOF
 
-echo "seed-crons: 4 jobs seeded at $JOBS_FILE"
-echo "seed-crons: kick-start will fire at ${IMMEDIATE_AT} (UTC)"
+echo "seed-crons: 3 recurring jobs seeded at $JOBS_FILE"
