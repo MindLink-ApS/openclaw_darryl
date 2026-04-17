@@ -38,6 +38,8 @@
     "mode": "merge",
     "providers": {
       "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "api": "openai-completions",
         "models": [
           {
             "id": "x-ai/grok-4.20",
