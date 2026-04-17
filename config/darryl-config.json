@@ -34,6 +34,24 @@
       }
     ]
   },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "openrouter": {
+        "models": [
+          {
+            "id": "x-ai/grok-4.20",
+            "name": "xAI Grok 4.20",
+            "reasoning": true,
+            "input": ["text", "image"],
+            "cost": { "input": 2, "output": 6, "cacheRead": 0.2, "cacheWrite": 0 },
+            "contextWindow": 2000000,
+            "maxTokens": 32768
+          }
+        ]
+      }
+    }
+  },
   "tools": {
     "web": {
       "search": {
