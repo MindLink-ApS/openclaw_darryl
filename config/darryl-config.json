@@ -10,7 +10,7 @@
     "defaults": {
       "userTimezone": "America/Chicago",
       "skipBootstrap": true,
-      "thinkingDefault": "low",
+      "thinkingDefault": "xhigh",
       "heartbeat": {
         "every": "30m",
         "activeHours": {
@@ -29,7 +29,7 @@
         "name": "Emma Jones",
         "workspace": "/app/workspace",
         "model": {
-          "primary": "anthropic/claude-haiku-4-5-20251001"
+          "primary": "x-ai/grok-4.20"
         }
       }
     ]
