@@ -28,7 +28,7 @@ cat > "$JOBS_FILE" <<'EOF'
       "wakeMode": "now",
       "payload": {
         "kind": "agentTurn",
-        "message": "Run the daily-scout skill. Space Brave Search queries 5 minutes apart over a 2-hour window. Search all sources for new P&C executive moves (US-only), validate, enrich, store leads, and email the 'Daily Scout Complete' report to Darryl at 6 AM CT."
+        "message": "Run the daily-scout skill. First fetch Business Insurance Comings and Goings from the homepage/person profiles, then space Brave Search queries 5 minutes apart over a 2-hour window. Search all sources for new P&C executive moves (US-only), validate, enrich, store leads, include the Capacity Snapshot, and email the 'Daily Scout Complete' report to Darryl at 6 AM CT."
       },
       "delivery": {
         "mode": "none"

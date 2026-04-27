@@ -32,6 +32,8 @@ Exclude life, health-only, or unrelated lines unless the executive has explicit 
 5. **Local business journals**
 6. **Conference speaker pages**, public bios, vCards
 
+High-priority direct pull: every daily discovery cycle must fetch `https://www.businessinsurance.com/`, parse the `Comings and Goings` section, visit every linked person profile, and process those profiles before broad web searches. If the homepage section is unavailable, fetch `https://www.businessinsurance.com/ppl/` and process the newest Comings & Goings profiles there.
+
 ---
 
 ## Operating Loop
@@ -47,6 +49,7 @@ Run targeted queries across sources. Scan "People on the Move" sections. Search 
 - P&C sector only
 - Target titles only (see above)
 - Within 60-day rolling window (source_published_date or move_effective_date)
+- Exception: for Business Insurance `Comings and Goings`, forwarded newsletters, and similar people-move lists, do not require target-title matching. Darryl wants U.S. people from those lists regardless of title, but they still need U.S. evidence and P&C relevance before Apollo spend.
 
 ### 3. EXTRACT
 
@@ -63,7 +66,7 @@ For each match, extract: full name, title, company, geography, dates, LinkedIn U
 Before any paid enrichment, store the person with `lead_candidates_upsert` and assign a `qualification_score` (0-100):
 
 - **Daily web scout threshold:** spend Apollo credits only at `qualification_score >= 70`
-- **Forwarded newsletter threshold:** spend Apollo credits at `qualification_score >= 60` because Darryl explicitly asked to broaden "Comings & Goings" style lists
+- **Comings & Goings / newsletter threshold:** spend Apollo credits at `qualification_score >= 60` because Darryl explicitly asked to broaden "Comings & Goings" style lists
 - Score based on U.S. evidence, P&C relevance, source reliability, move recency, duplicate risk, and whether required fields are known
 - If below threshold, store as `qualification_status: "rejected"` or `"candidate"` and do not call Apollo
 
@@ -297,13 +300,14 @@ Body should include:
 - Count of new leads found today
 - Top leads by relevance (name, title, company — brief)
 - Any leads needing human review
+- Capacity Snapshot: Apollo enrichments left, phone lookups left, pending phone lookups, and whether web research/email connectors are available
 - Note about attached CSV
 
-Do not include a search activity summary (sources checked, queries run). Do not mention Brave Search rate limits, API issues, or technical operational details unless they prevented finding leads entirely.
+Do not include a search activity summary (queries run, raw connector logs, or search pacing). Include the Capacity Snapshot in plain language. Only mention connector issues or rate limits if they reduced results or prevented finding leads.
 
 ### CSV Columns
 
-full_name, current_title, current_company, company_hq_address, email_address, mobile_phone, linkedin_url, source_published_date, move_effective_date, move_type, geography, functional_focus, notes, status_pipeline
+full_name, current_title, current_company, company_hq_address, email_address, mobile_phone, linkedin_url, source_label, source_url, source_published_date, move_effective_date, move_type, geography, functional_focus, notes, status_pipeline
 
 ---
 
@@ -430,7 +434,7 @@ Use `mem0_recall` before each interaction to load relevant context.
 - Never call `apollo_enrich` or `apollo_bulk_enrich` until the person has been recorded with `lead_candidates_upsert`
 - Always pass `qualification_score`, `source_type`, and `qualification_reason` into Apollo tools
 - For daily web discovery, Apollo requires `qualification_score >= 70`
-- For Darryl-forwarded newsletters / "Comings & Goings" lists, Apollo requires `qualification_score >= 60`
+- For Darryl-forwarded newsletters, Business Insurance `Comings and Goings`, and similar people-move lists, Apollo requires `qualification_score >= 60`
 - If Apollo returns `qualification_rejected`, improve public-source validation or leave the candidate stored for review; do not retry paid enrichment with the same evidence
 - Use `mem0_recall` before scoring to apply Darryl's preferences, accepted/rejected patterns, and source-quality notes
 - Use `web_fetch` for known source URLs before paid enrichment. If it fails or returns too little content, use `browser` on the same URL and take an efficient AI snapshot before paid enrichment.
@@ -470,7 +474,8 @@ Use `mem0_recall` before each interaction to load relevant context.
 - Each lead must appear exactly once. Deduplicate across all sources before compiling the report.
 - Include ALL complete leads from today (discovered via search, newsletter parsing, and webhook phone arrivals)
 - CSV attached for filing/CRM import — contains ONLY leads with both email AND phone
-- Do NOT mention pending/awaiting leads in the daily report or its CSV. In direct replies to Darryl (newsletter parsing, enrichment requests), it is OK to mention that phone lookups are in progress.
+- Include a short Capacity Snapshot: Apollo enrichments left, phone lookups left, pending phone lookup count, and whether web research/email connectors are available
+- Do NOT mention individual pending/awaiting leads in the daily report or its CSV. An aggregate pending phone count is allowed in the Capacity Snapshot. In direct replies to Darryl (newsletter parsing, enrichment requests), it is OK to mention that phone lookups are in progress.
 
 ### Budget Management
 

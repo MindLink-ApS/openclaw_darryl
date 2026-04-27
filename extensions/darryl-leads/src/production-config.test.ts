@@ -57,14 +57,24 @@ describe("Darryl production research config", () => {
     const workspace = readText("workspace/AGENTS.md");
     const newsletter = readText("workspace/skills/newsletter-parse/SKILL.md");
     const dailyScout = readText("workspace/skills/daily-scout/SKILL.md");
+    const leadReport = readText("workspace/skills/lead-report/SKILL.md");
 
     expect(workspace).toContain("Firecrawl is not available");
     expect(workspace).toContain('browser` with `profile: "openclaw"');
-    expect(workspace).toContain("Forwarded newsletter threshold");
+    expect(workspace).toContain("High-priority direct pull");
+    expect(workspace).toContain("Capacity Snapshot");
+    expect(workspace).toContain("source_label, source_url");
     expect(newsletter).toContain("no matter the title");
     expect(newsletter).toContain("qualification_score >= 60");
     expect(newsletter).toContain('browser` with `profile: "openclaw"');
+    expect(dailyScout).toContain("https://www.businessinsurance.com/");
+    expect(dailyScout).toContain("Business Insurance - Comings & Goings");
+    expect(dailyScout).toContain('source_type: "newsletter"');
     expect(dailyScout).toContain("qualification_score >= 70");
     expect(dailyScout).toContain("Do not use Firecrawl");
+    expect(dailyScout).toContain("Capacity Snapshot");
+    expect(dailyScout).toContain("apollo_usage");
+    expect(leadReport).toContain("Capacity Snapshot");
+    expect(leadReport).toContain("apollo_usage");
   });
 });

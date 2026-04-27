@@ -9,6 +9,8 @@ const CSV_COLUMNS = [
   "email_address",
   "mobile_phone",
   "linkedin_url",
+  "source_label",
+  "source_url",
   "source_published_date",
   "move_effective_date",
   "move_type",
@@ -35,7 +37,9 @@ function escapeField(value: string | number | null | undefined): string {
 export function generateCsv(leads: Lead[]): string {
   const header = CSV_COLUMNS.join(",");
   const rows = leads.map((lead) =>
-    CSV_COLUMNS.map((col) => escapeField(lead[col as keyof Lead] as string | number | null)).join(","),
+    CSV_COLUMNS.map((col) => escapeField(lead[col as keyof Lead] as string | number | null)).join(
+      ",",
+    ),
   );
   return [header, ...rows].join("\n") + "\n";
 }

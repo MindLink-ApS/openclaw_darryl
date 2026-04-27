@@ -33,7 +33,23 @@ Before searching, load Darryl's feedback and preferences:
 
 ## Step 1: Search Sources
 
-Run these web searches in sequence. For each, use the `web_search` tool:
+Before broad searches, pull the high-signal list pages that Darryl explicitly cares about. These cost less than broad search and catch people who may not rank in search yet.
+
+### Direct list pulls
+
+1. Use `web_fetch` on `https://www.businessinsurance.com/`.
+2. Find the `Comings and Goings` section and extract every linked person in that block.
+3. Visit each person profile with `web_fetch`; if fetch returns thin/blocked content, use `browser` with `profile: "openclaw"` and an efficient AI snapshot.
+4. For every Business Insurance profile, extract name, company, title/body role, sector, source date, and source URL.
+5. Apply the broad "Comings & Goings" rule Darryl requested:
+   - Do not require target-title matching.
+   - Require U.S. evidence or store `missing_fields: ["geography"]` and verify before Apollo.
+   - Require P&C relevance through the sector, company description, or a second public source.
+   - Store with `lead_candidates_upsert`, `source_type: "newsletter"`, `source_label: "Business Insurance - Comings & Goings"`, and a qualification reason.
+   - Continue to Apollo only when `qualification_score >= 60`.
+6. If the homepage section is absent, fetch `https://www.businessinsurance.com/ppl/` and process the newest Comings & Goings profiles the same way.
+
+Run these web searches in sequence after direct list pulls. For each, use the `web_search` tool:
 
 ### Trade journals (highest yield)
 
@@ -177,7 +193,8 @@ This backfill pass ensures older leads don't languish with missing contact info.
 
 1. Call `leads_export_csv` filtered to leads with BOTH email AND phone populated (status `"new"` or `"queued_for_outreach"` with today's date range)
 2. Call `leads_stats` to get summary counts
-3. Call `email_send_csv` to send the report:
+3. Call `apollo_usage` to get remaining Apollo sync and async phone credits
+4. Call `email_send_csv` to send the report:
 
 **To:** darryl.thompson@raymondjames.com
 **Subject:** `Daily Scout Complete — [DATE] — [N] New Leads`
@@ -195,10 +212,16 @@ Top New Leads:
 Needs Review:
 - [Name] — [Reason]
 
+Capacity Snapshot:
+- Apollo enrichments left this month: [remaining]/[limit]
+- Phone lookups left this month: [remaining]/[limit]
+- Pending phone lookups: [currently_awaiting]
+- Research connectors: web search/fetch/browser available unless noted
+
 The attached CSV contains all complete leads (email + phone confirmed). Each lead appears once — no duplicates.
 ```
 
-Do not include search activity summaries (sources checked, queries run) or technical operational details (API rate limits, search pacing). Only mention issues if they prevented finding leads entirely.
+Do not include search activity summaries (queries run, raw connector logs, or search pacing). Include the Capacity Snapshot above in plain language. Only mention connector issues or rate limits if they reduced results or prevented finding leads.
 
 **CSV attachment:** Use the path from `leads_export_csv` — ONLY leads with both email and phone.
 

@@ -49,6 +49,8 @@ export type Lead = {
   email_address: string | null;
   mobile_phone: string | null;
   linkedin_url: string;
+  source_url: string | null;
+  source_label: string | null;
   source_published_date: string;
   move_effective_date: string | null;
   move_type: string;
@@ -474,6 +476,8 @@ export class LeadsDB {
       .prepare(
         `SELECT id, full_name, current_title, current_company,
           company_hq_address, email_address, mobile_phone, linkedin_url,
+          (SELECT source_url FROM leader_sources WHERE leader_id = leaders.id ORDER BY created_at DESC LIMIT 1) AS source_url,
+          (SELECT source_label FROM leader_sources WHERE leader_id = leaders.id ORDER BY created_at DESC LIMIT 1) AS source_label,
           source_published_date, move_effective_date, move_type,
           geography, functional_focus, notes, status_pipeline,
           do_not_contact_reason, first_seen_at, last_verified_at,
@@ -529,6 +533,8 @@ export class LeadsDB {
 
     const sql = `SELECT id, full_name, current_title, current_company,
       company_hq_address, email_address, mobile_phone, linkedin_url,
+      (SELECT source_url FROM leader_sources WHERE leader_id = leaders.id ORDER BY created_at DESC LIMIT 1) AS source_url,
+      (SELECT source_label FROM leader_sources WHERE leader_id = leaders.id ORDER BY created_at DESC LIMIT 1) AS source_label,
       source_published_date, move_effective_date, move_type,
       geography, functional_focus, notes, status_pipeline,
       do_not_contact_reason, first_seen_at, last_verified_at,
