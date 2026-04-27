@@ -28,6 +28,10 @@ services:
         sync: false
       - key: BRAVE_API_KEY
         sync: false
+      - key: OPENCLAW_INSTALL_BROWSER
+        value: "1"
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /home/node/.cache/ms-playwright
       - key: OPENAI_API_KEY
         sync: false
       - key: EMMA_GMAIL_ADDRESS

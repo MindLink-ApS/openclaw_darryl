@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { SQLInputValue } from "node:sqlite";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
@@ -83,6 +84,57 @@ export type SearchFilters = {
   require_contact?: boolean;
 };
 
+export type CandidateSourceType = "newsletter" | "web" | "referral" | "manual";
+
+export type CandidateStatus = "candidate" | "qualified" | "rejected" | "enriched";
+
+export type LeadCandidateInput = {
+  full_name: string;
+  current_company: string;
+  source_url: string;
+  current_title?: string;
+  source_label?: string;
+  source_published_date?: string;
+  geography?: string;
+  is_us_based?: boolean;
+  pc_relevance?: string;
+  title_match?: boolean;
+  source_type?: CandidateSourceType;
+  qualification_score?: number;
+  qualification_status?: CandidateStatus;
+  missing_fields?: string[];
+  notes?: string;
+};
+
+export type LeadCandidate = {
+  id: number;
+  full_name: string;
+  current_title: string | null;
+  current_company: string;
+  source_url: string;
+  source_label: string | null;
+  source_published_date: string | null;
+  geography: string | null;
+  is_us_based: boolean | null;
+  pc_relevance: string | null;
+  title_match: boolean | null;
+  source_type: CandidateSourceType;
+  qualification_score: number;
+  qualification_status: CandidateStatus;
+  missing_fields: string[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CandidateSearchFilters = {
+  status?: CandidateStatus;
+  source_type?: CandidateSourceType;
+  min_score?: number;
+  limit?: number;
+  offset?: number;
+};
+
 export type LeadStats = {
   total: number;
   byStatus: Record<string, number>;
@@ -142,6 +194,41 @@ const MIGRATIONS = [
     hq_address TEXT,
     website TEXT
   );`,
+
+  // v3: pre-enrichment candidates. This stores cheap research before Apollo credits are spent.
+  `CREATE TABLE IF NOT EXISTS lead_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_name TEXT NOT NULL,
+    current_title TEXT,
+    current_company TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    source_label TEXT,
+    source_published_date TEXT,
+    geography TEXT,
+    is_us_based INTEGER,
+    pc_relevance TEXT,
+    title_match INTEGER,
+    source_type TEXT NOT NULL DEFAULT 'web'
+      CHECK (source_type IN ('newsletter','web','referral','manual')),
+    qualification_score INTEGER NOT NULL DEFAULT 0
+      CHECK (qualification_score >= 0 AND qualification_score <= 100),
+    qualification_status TEXT NOT NULL DEFAULT 'candidate'
+      CHECK (qualification_status IN ('candidate','qualified','rejected','enriched')),
+    missing_fields TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    normalized_name TEXT NOT NULL GENERATED ALWAYS AS (lower(trim(full_name))) STORED,
+    normalized_company TEXT NOT NULL GENERATED ALWAYS AS (lower(replace(trim(current_company), '.', ''))) STORED,
+    UNIQUE (normalized_name, normalized_company, source_url)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_lead_candidates_status
+    ON lead_candidates (qualification_status, qualification_score DESC);
+  CREATE INDEX IF NOT EXISTS idx_lead_candidates_source_type
+    ON lead_candidates (source_type);
+  CREATE INDEX IF NOT EXISTS idx_lead_candidates_updated
+    ON lead_candidates (updated_at DESC);`,
 ];
 
 // v2: widen status_pipeline CHECK to include 'awaiting_phone' (SQLite requires table rebuild).
@@ -409,7 +496,7 @@ export class LeadsDB {
 
   search(filters: SearchFilters): Lead[] {
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
 
     if (filters.name) {
       conditions.push("normalized_name LIKE ?");
@@ -514,6 +601,137 @@ export class LeadsDB {
     });
   }
 
+  upsertCandidate(candidate: LeadCandidateInput): {
+    id: number;
+    action: "created" | "updated";
+    qualification_status: CandidateStatus;
+  } {
+    const now = new Date().toISOString();
+    const qualificationScore = clampQualificationScore(candidate.qualification_score ?? 0);
+    const qualificationStatus = candidate.qualification_status ?? "candidate";
+    const sourceType = candidate.source_type ?? "web";
+    const missingFields = JSON.stringify(candidate.missing_fields ?? []);
+
+    const existing = this.db
+      .prepare(
+        `SELECT id FROM lead_candidates
+         WHERE normalized_name = lower(trim(?))
+           AND normalized_company = lower(replace(trim(?), '.', ''))
+           AND source_url = ?`,
+      )
+      .get(candidate.full_name, candidate.current_company, candidate.source_url) as
+      | { id: number }
+      | undefined;
+
+    if (existing) {
+      this.db
+        .prepare(
+          `UPDATE lead_candidates SET
+             current_title = COALESCE(?, current_title),
+             source_label = COALESCE(?, source_label),
+             source_published_date = COALESCE(?, source_published_date),
+             geography = COALESCE(?, geography),
+             is_us_based = COALESCE(?, is_us_based),
+             pc_relevance = COALESCE(?, pc_relevance),
+             title_match = COALESCE(?, title_match),
+             source_type = ?,
+             qualification_score = ?,
+             qualification_status = ?,
+             missing_fields = ?,
+             notes = COALESCE(?, notes),
+             updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          candidate.current_title ?? null,
+          candidate.source_label ?? null,
+          candidate.source_published_date ?? null,
+          candidate.geography ?? null,
+          optionalBoolToInt(candidate.is_us_based),
+          candidate.pc_relevance ?? null,
+          optionalBoolToInt(candidate.title_match),
+          sourceType,
+          qualificationScore,
+          qualificationStatus,
+          missingFields,
+          candidate.notes ?? null,
+          now,
+          existing.id,
+        );
+      return { id: existing.id, action: "updated", qualification_status: qualificationStatus };
+    }
+
+    const result = this.db
+      .prepare(
+        `INSERT INTO lead_candidates (
+          full_name, current_title, current_company, source_url, source_label,
+          source_published_date, geography, is_us_based, pc_relevance,
+          title_match, source_type, qualification_score, qualification_status,
+          missing_fields, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        candidate.full_name,
+        candidate.current_title ?? null,
+        candidate.current_company,
+        candidate.source_url,
+        candidate.source_label ?? null,
+        candidate.source_published_date ?? null,
+        candidate.geography ?? null,
+        optionalBoolToInt(candidate.is_us_based),
+        candidate.pc_relevance ?? null,
+        optionalBoolToInt(candidate.title_match),
+        sourceType,
+        qualificationScore,
+        qualificationStatus,
+        missingFields,
+        candidate.notes ?? null,
+        now,
+        now,
+      );
+
+    return {
+      id: Number(result.lastInsertRowid),
+      action: "created",
+      qualification_status: qualificationStatus,
+    };
+  }
+
+  searchCandidates(filters: CandidateSearchFilters): LeadCandidate[] {
+    const conditions: string[] = [];
+    const params: SQLInputValue[] = [];
+
+    if (filters.status) {
+      conditions.push("qualification_status = ?");
+      params.push(filters.status);
+    }
+    if (filters.source_type) {
+      conditions.push("source_type = ?");
+      params.push(filters.source_type);
+    }
+    if (typeof filters.min_score === "number") {
+      conditions.push("qualification_score >= ?");
+      params.push(clampQualificationScore(filters.min_score));
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const limit = filters.limit ?? 50;
+    const offset = filters.offset ?? 0;
+    const rows = this.db
+      .prepare(
+        `SELECT id, full_name, current_title, current_company, source_url, source_label,
+          source_published_date, geography, is_us_based, pc_relevance, title_match,
+          source_type, qualification_score, qualification_status, missing_fields,
+          notes, created_at, updated_at
+         FROM lead_candidates ${where}
+         ORDER BY qualification_score DESC, updated_at DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...params, limit, offset) as Array<Record<string, unknown>>;
+
+    return rows.map(rowToCandidate);
+  }
+
   getSourcesByLeaderId(leaderId: number): LeadSource[] {
     return this.db
       .prepare(
@@ -536,4 +754,54 @@ export class LeadsDB {
   close(): void {
     this.db.close();
   }
+}
+
+function optionalBoolToInt(value: boolean | undefined): number | null {
+  if (value === undefined) return null;
+  return value ? 1 : 0;
+}
+
+function intToOptionalBool(value: unknown): boolean | null {
+  if (value === null || value === undefined) return null;
+  return Number(value) === 1;
+}
+
+function clampQualificationScore(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseMissingFields(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === "string");
+  } catch {
+    return [];
+  }
+}
+
+function rowToCandidate(row: Record<string, unknown>): LeadCandidate {
+  return {
+    id: Number(row.id),
+    full_name: String(row.full_name),
+    current_title: typeof row.current_title === "string" ? row.current_title : null,
+    current_company: String(row.current_company),
+    source_url: String(row.source_url),
+    source_label: typeof row.source_label === "string" ? row.source_label : null,
+    source_published_date:
+      typeof row.source_published_date === "string" ? row.source_published_date : null,
+    geography: typeof row.geography === "string" ? row.geography : null,
+    is_us_based: intToOptionalBool(row.is_us_based),
+    pc_relevance: typeof row.pc_relevance === "string" ? row.pc_relevance : null,
+    title_match: intToOptionalBool(row.title_match),
+    source_type: String(row.source_type) as CandidateSourceType,
+    qualification_score: Number(row.qualification_score),
+    qualification_status: String(row.qualification_status) as CandidateStatus,
+    missing_fields: parseMissingFields(row.missing_fields),
+    notes: typeof row.notes === "string" ? row.notes : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
 }

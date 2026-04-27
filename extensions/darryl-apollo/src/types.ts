@@ -107,7 +107,8 @@ export interface EnrichmentResult {
     | "no_email"
     | "no_match"
     | "budget_exhausted"
-    | "already_enriched";
+    | "already_enriched"
+    | "qualification_rejected";
   sync_usage: string;
   async_phone_usage: string;
   note?: string;

@@ -3,8 +3,8 @@
  * Falls back to a simple SQLite-based store if mem0ai fails to load or initialize.
  */
 
-import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { join } from "node:path";
 
 // ============================================================================
@@ -69,7 +69,7 @@ async function createMem0Backend(
 
     const memory = new Memory(config);
     logger.info("darryl-mem0: mem0ai/oss backend initialized");
-    return memory as Mem0Instance;
+    return memory as unknown as Mem0Instance;
   } catch (err) {
     logger.warn(`darryl-mem0: mem0ai/oss failed to load, falling back to SQLite. ${String(err)}`);
     return null;
@@ -90,6 +90,8 @@ type SQLiteDb = {
   close(): void;
 };
 
+type SQLiteConstructor = new (dbPath: string) => SQLiteDb;
+
 async function openSQLite(dbPath: string): Promise<SQLiteDb> {
   // Try node:sqlite first (Node 22+ built-in, used by darryl-leads)
   try {
@@ -103,7 +105,8 @@ async function openSQLite(dbPath: string): Promise<SQLiteDb> {
 
   // Try better-sqlite3 (common in Node environments)
   try {
-    const mod = await import("better-sqlite3");
+    const driver = "better-sqlite3";
+    const mod = (await import(driver)) as { default?: SQLiteConstructor } & SQLiteConstructor;
     const BetterSqlite3 = mod.default ?? mod;
     return new BetterSqlite3(dbPath) as SQLiteDb;
   } catch {
@@ -112,8 +115,15 @@ async function openSQLite(dbPath: string): Promise<SQLiteDb> {
 
   // Try bun:sqlite
   try {
-    const mod = await import("bun:sqlite");
+    const driver = "bun:sqlite";
+    const mod = (await import(driver)) as {
+      Database?: SQLiteConstructor;
+      default?: SQLiteConstructor;
+    };
     const Database = mod.Database ?? mod.default;
+    if (!Database) {
+      throw new Error("bun:sqlite Database export missing");
+    }
     return new Database(dbPath) as SQLiteDb;
   } catch {
     // not available
@@ -154,10 +164,7 @@ class SqliteFallbackStore {
     this.logger.info("darryl-mem0: SQLite fallback initialized");
   }
 
-  async add(
-    content: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<{ id: string }> {
+  async add(content: string, metadata?: Record<string, unknown>): Promise<{ id: string }> {
     await this.ensureInit();
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -236,11 +243,7 @@ export class MemoryStore {
   private readonly apiKey: string | undefined;
   private readonly logger: Logger;
 
-  constructor(
-    dataDir: string,
-    logger: Logger,
-    opts?: { userId?: string; openaiApiKey?: string },
-  ) {
+  constructor(dataDir: string, logger: Logger, opts?: { userId?: string; openaiApiKey?: string }) {
     this.dataDir = dataDir;
     this.logger = logger;
     this.userId = opts?.userId ?? "darryl";
@@ -270,17 +273,14 @@ export class MemoryStore {
     }
   }
 
-  async add(
-    content: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<{ id: string }> {
+  async add(content: string, metadata?: Record<string, unknown>): Promise<{ id: string }> {
     await this.ensureInit();
 
     if (this.mem0) {
-      const result = await this.mem0.add(
-        [{ role: "user", content }],
-        { userId: this.userId, metadata },
-      );
+      const result = await this.mem0.add([{ role: "user", content }], {
+        userId: this.userId,
+        metadata,
+      });
       const firstResult = result.results?.[0];
       return { id: firstResult?.id ?? randomUUID() };
     }

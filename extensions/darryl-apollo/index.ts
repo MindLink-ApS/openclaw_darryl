@@ -10,7 +10,6 @@ interface ApolloPluginConfig {
   asyncPhoneMonthlyLimit?: number;
   webhookBaseUrl?: string;
   webhookSecret?: string;
-  hooksToken?: string;
   dataDir?: string;
   leadsDbPath?: string;
 }
@@ -36,13 +35,8 @@ const plugin = {
     const asyncPhoneLimitDefault = cfg?.asyncPhoneMonthlyLimit ?? 50;
     const webhookSecret = cfg?.webhookSecret;
     const webhookBaseUrl = cfg?.webhookBaseUrl;
-    const hooksToken = cfg?.hooksToken;
     const dataDir = api.resolvePath(cfg?.dataDir ?? "~/.openclaw/darryl/apollo");
     const leadsDbPath = api.resolvePath(cfg?.leadsDbPath ?? "~/.openclaw/darryl/leads.db");
-    const gatewayPort = Number.parseInt(
-      process.env.OPENCLAW_GATEWAY_PORT ?? process.env.PORT ?? "10000",
-      10,
-    );
 
     // ---- Build webhook URL ----
 
@@ -70,13 +64,11 @@ const plugin = {
 
     // ---- Register webhook HTTP route ----
 
-    if (webhookSecret && hooksToken) {
+    if (webhookSecret) {
       const webhookPath = `/apollo-phone-webhook/${webhookSecret}`;
       const handler = createWebhookHandler({
         db,
         leadsDbPath,
-        hooksToken,
-        gatewayPort,
       });
 
       api.registerHttpRoute({

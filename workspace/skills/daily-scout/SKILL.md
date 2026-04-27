@@ -81,12 +81,19 @@ insurance executive "joins" OR "appointed" OR "promoted" site:bizjournals.com 20
 For every search result that looks relevant:
 
 1. Use `web_fetch` to read the full article/page
+   - If `web_fetch` fails, is blocked, or returns thin content, use `browser` with `profile: "openclaw"` on the same URL and take an efficient AI snapshot.
+   - Do not use Firecrawl; it is not available.
 2. Extract: full name, new title, new company, effective date, source URL
 3. **Filter check:**
    - Is this P&C insurance? (not life/health-only) → skip if no
    - Is the title one of our targets? (CDO, VP, Regional Director, AVP, BD, Underwriter) → skip if no
    - Is the move within 60 days? → skip if no
-4. If passes all filters, continue to enrichment
+4. If passes all filters, call `lead_candidates_upsert` before any Apollo spend:
+   - `source_type: "web"`
+   - `qualification_score`: 0-100 based on U.S. evidence, P&C relevance, target-title fit, source reliability, recency, and duplicate risk
+   - `qualification_status: "qualified"` only when score is 70+
+   - `missing_fields`: include any of `linkedin_url`, `company_domain`, `geography`, `source_date`, `title`
+5. Continue to enrichment only when `qualification_score >= 70`. Otherwise keep the candidate stored and skip Apollo.
 
 ## Step 3: Resolve Pending Leads (BEFORE new discovery)
 
@@ -95,7 +102,7 @@ Before enriching new leads, check all leads stuck in `awaiting_phone` status:
 1. Call `leads_search` with `status: "awaiting_phone"` to find pending leads
 2. Call `apollo_usage` to check budget status AND expire pending records older than 2 hours
 3. For each `awaiting_phone` lead:
-   - If the webhook already delivered the phone (lead now has `mobile_phone` populated and status was promoted to `"new"` by the webhook handler) → it was already sent to Darryl individually. Note as "(sent earlier today)" for the daily report recap.
+   - If the webhook already delivered the phone (lead now has `mobile_phone` populated and status was promoted to `"new"` by the webhook handler) → include it in the next daily report if it has not already appeared in a prior report.
    - If still awaiting AND pending < 2 hours → leave alone, webhook may still arrive
    - If pending >= 2 hours or expired → web search fallback for phone:
 
@@ -114,22 +121,25 @@ For each validated lead from Step 2:
 1. Search for their LinkedIn profile: `web_search` for `"<full name>" "<company>" site:linkedin.com`
 2. Search for company HQ: `web_search` for `"<company>" headquarters address`
 3. Look for geography info in the article or company page
-4. Determine functional focus from title/context (distribution, underwriting, claims, etc.)
+4. If LinkedIn, company, or source pages are JS-heavy or blocked to `web_fetch`, use `browser` with `profile: "openclaw"` and `snapshotFormat: "ai"` to extract only the needed facts.
+5. Determine functional focus from title/context (distribution, underwriting, claims, etc.)
 
 ### Apollo Enrichment (replaces manual email/phone search)
 
-5. Call `apollo_enrich` (or batch up to 10 leads with `apollo_bulk_enrich`) with `first_name`, `last_name`, `organization_name`, `domain` (if known), `linkedin_url` (if known)
-6. Based on the result:
+6. Call `apollo_enrich` (or batch up to 10 leads with `apollo_bulk_enrich`) with `first_name`, `last_name`, `organization_name`, `domain` (if known), `linkedin_url` (if known), `source_type: "web"`, `qualification_score`, and `qualification_reason`.
+7. Based on the result:
    - **`deliver: true` (complete — both email + phone found):**
      Call `leads_upsert` with all fields including `email_address`, `mobile_phone`, `status_pipeline: "new"`. Add to today's report.
    - **`status: "awaiting_phone"` (email found, async phone hunt triggered):**
-     Call `leads_upsert` with email, `status_pipeline: "awaiting_phone"`. DO NOT include in today's report. The phone will arrive via webhook within ~15 minutes and Darryl will be notified automatically.
+     Call `leads_upsert` with email, `status_pipeline: "awaiting_phone"`. DO NOT include in today's report. The phone may arrive via webhook and will be stored silently for a later daily report.
+   - **`status: "qualification_rejected"`:**
+     Do not retry Apollo. Leave the candidate stored for review or improve public-source validation first.
    - **`status: "no_email"` or `"no_match"` (Apollo couldn't find them):**
      Fall back to manual web search for email and phone (existing queries from lead-enrich skill). If BOTH found → `leads_upsert` status `"new"`, deliver. If not both → `leads_upsert` status `"needs_human_review"`.
    - **`status: "budget_exhausted"`:**
      Fall back to manual web search for both email and phone. Note budget status internally.
 
-7. **Validate any contact details** — whether from Apollo or web search:
+8. **Validate any contact details** — whether from Apollo or web search:
    - Confirm email domain matches company domain
    - Never adopt generic addresses (info@, contact@, hr@)
    - Never guess patterns — only use explicitly published or Apollo-verified values

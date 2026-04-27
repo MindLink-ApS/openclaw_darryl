@@ -18,6 +18,10 @@ export const PIPELINE_STATUSES = [
   "needs_human_review",
 ] as const;
 
+export const CANDIDATE_SOURCE_TYPES = ["newsletter", "web", "referral", "manual"] as const;
+
+export const CANDIDATE_STATUSES = ["candidate", "qualified", "rejected", "enriched"] as const;
+
 export const LeadUpsertParams = Type.Object(
   {
     full_name: Type.String({ description: "Full name of the executive" }),
@@ -138,3 +142,66 @@ export const LeadExportCsvParams = Type.Object(
 );
 
 export const LeadStatsParams = Type.Object({}, { additionalProperties: false });
+
+export const LeadCandidateUpsertParams = Type.Object(
+  {
+    full_name: Type.String({ description: "Full name found before paid enrichment" }),
+    current_company: Type.String({ description: "Current or announced company" }),
+    source_url: Type.String({ description: "Source URL or forwarded-source label" }),
+    current_title: Type.Optional(Type.String({ description: "Current or announced title" })),
+    source_label: Type.Optional(Type.String({ description: "Human-readable source label" })),
+    source_published_date: Type.Optional(
+      Type.String({ description: "Source publication date (YYYY-MM-DD)" }),
+    ),
+    geography: Type.Optional(Type.String({ description: "Person or role geography" })),
+    is_us_based: Type.Optional(
+      Type.Boolean({ description: "Whether the person appears US-based" }),
+    ),
+    pc_relevance: Type.Optional(
+      Type.String({ description: "Why this is relevant to P&C insurance" }),
+    ),
+    title_match: Type.Optional(
+      Type.Boolean({ description: "Whether the title matches the normal daily-scout title list" }),
+    ),
+    source_type: optionalStringEnum(CANDIDATE_SOURCE_TYPES, {
+      description: "Where this candidate came from",
+      default: "web",
+    }),
+    qualification_score: Type.Number({
+      description: "0-100 confidence score before paid enrichment",
+      minimum: 0,
+      maximum: 100,
+      default: 0,
+    }),
+    qualification_status: optionalStringEnum(CANDIDATE_STATUSES, {
+      description: "Candidate disposition before enrichment",
+      default: "candidate",
+    }),
+    missing_fields: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Fields still missing before paid enrichment",
+      }),
+    ),
+    notes: Type.Optional(Type.String({ description: "Qualification notes and caveats" })),
+  },
+  { additionalProperties: false },
+);
+
+export const LeadCandidateSearchParams = Type.Object(
+  {
+    status: optionalStringEnum(CANDIDATE_STATUSES, { description: "Candidate status filter" }),
+    source_type: optionalStringEnum(CANDIDATE_SOURCE_TYPES, {
+      description: "Candidate source-type filter",
+    }),
+    min_score: Type.Optional(
+      Type.Number({ description: "Minimum qualification score", minimum: 0, maximum: 100 }),
+    ),
+    limit: Type.Optional(
+      Type.Number({ description: "Max results to return (default 50)", minimum: 1, maximum: 500 }),
+    ),
+    offset: Type.Optional(
+      Type.Number({ description: "Offset for pagination (default 0)", minimum: 0 }),
+    ),
+  },
+  { additionalProperties: false },
+);

@@ -18,34 +18,37 @@
    2b. **Contact backfill** — Check for leads in `awaiting_phone` or `needs_human_review` status. For any that have been stuck for 24+ hours since last enrichment attempt, run the contact-backfill skill to try office phone numbers, company main lines, and email pattern inference.
 3. **Daily report status** — Verify today's daily report has been sent. If not and it's past 6:30 AM CT, generate and send it.
 4. **Memory sync** — Use `mem0_recall` to check for recent feedback from Darryl that should influence current search patterns.
-5. **Pending replies** — Already covered by the inbox check in step 1. Skip if step 1 ran successfully.
+5. **Candidate review** — Call `lead_candidates_search` for stored candidates with `status: "candidate"` and `min_score: 60`. Promote only well-evidenced candidates to Apollo enrichment; leave weak candidates stored without spending credits.
+6. **Pending replies** — Already covered by the inbox check in step 1. Skip if step 1 ran successfully.
 
 ## Self-Health Checks (Every Cycle)
 
-6. **Search API** — Run a trivial `web_search` query (e.g., `"property casualty" insurance 2026`). If it fails, include a note in the next report: "Web search was temporarily unavailable — today's results may be incomplete."
-7. **Leads database** — Call `leads_stats`. If it errors, this is critical — email Darryl immediately with subject `Emma Jones — Database Issue` and the error details.
-8. **Email delivery** — If the last `email_send` or `email_send_csv` failed, retry once. If retry also fails, log it. On the next successful send, mention: "Note: a previous email may not have been delivered due to a temporary issue."
-9. **Memory system** — Call `mem0_recall` with a known query. If it errors, note that preferences and exclusions may not be applied in this cycle.
+7. **Search API** — Run a trivial `web_search` query (e.g., `"property casualty" insurance 2026`). If it fails, include a note in the next report: "Web search was temporarily unavailable — today's results may be incomplete."
+8. **Fetch extraction** — Use `web_fetch` on one known source homepage. If it fails or returns too little content, use `browser` with `profile: "openclaw"` to open the same URL and take an efficient AI snapshot.
+9. **Browser health** — Call `browser` with `action: "status"` and `profile: "openclaw"`. If not running, call `browser` with `action: "start"`. If browser startup fails, continue with `web_search`/`web_fetch` and note that JS-heavy sources may be incomplete.
+10. **Leads database** — Call `leads_stats`. If it errors, this is critical — email Darryl immediately with subject `Emma Jones — Database Issue` and the error details.
+11. **Email delivery** — If the last `email_send` or `email_send_csv` failed, retry once. If retry also fails, log it. On the next successful send, mention: "Note: a previous email may not have been delivered due to a temporary issue."
+12. **Memory system** — Call `mem0_recall` with a known query. If it errors, note that preferences and exclusions may not be applied in this cycle.
 
 ## Weekly (Monday)
 
-10. **Pipeline cleanup** — Review all `contacted` leads older than 30 days with no follow-up activity. Email Darryl a list and suggest status updates (advance to `in_conversation`, mark `do_not_contact`, or schedule another follow-up).
-11. **Source health** — Verify key data sources are still accessible by running `web_fetch` on each homepage:
+13. **Pipeline cleanup** — Review all `contacted` leads older than 30 days with no follow-up activity. Email Darryl a list and suggest status updates (advance to `in_conversation`, mark `do_not_contact`, or schedule another follow-up).
+14. **Source health** — Verify key data sources are still accessible by running `web_fetch` on each homepage:
     - insurancejournal.com
     - businessinsurance.com
     - carriermanagement.com
     - propertycasualty360.com
     - ambest.com
       Report any that are down, blocking access, or returning unexpected content.
-12. **Weekly digest** — Generate a full pipeline summary and call plan for the week. Group leads by contact count for prioritization. Email to Darryl with CSV attachment.
-13. **Overdue follow-ups** — Find leads where `next_follow_up` date has passed. Include prominently in the weekly digest under "Overdue Follow-ups."
-14. **Expiring leads** — Find leads approaching the 60-day window edge. Flag any that will age out this week so Darryl can prioritize.
+15. **Weekly digest** — Generate a full pipeline summary and call plan for the week. Group leads by contact count for prioritization. Email to Darryl with CSV attachment.
+16. **Overdue follow-ups** — Find leads where `next_follow_up` date has passed. Include prominently in the weekly digest under "Overdue Follow-ups."
+17. **Expiring leads** — Find leads approaching the 60-day window edge. Flag any that will age out this week so Darryl can prioritize.
 
 ## Monthly (First Monday)
 
-15. **Pipeline health report** — Summarize the full month: leads discovered, leads contacted, conversion to `in_conversation`, leads expired/removed. Include trends (improving/declining lead volume, best-performing sources).
-16. **Source effectiveness** — Review which search queries and sources yielded the most validated leads. Store findings via `mem0_remember` to refine future searches.
-17. **Preference review** — Recall all stored exclusions and preferences. Include a brief list in the monthly email so Darryl can confirm they're still accurate.
+18. **Pipeline health report** — Summarize the full month: leads discovered, leads contacted, conversion to `in_conversation`, leads expired/removed. Include trends (improving/declining lead volume, best-performing sources).
+19. **Source effectiveness** — Review which search queries and sources yielded the most validated leads. Store findings via `mem0_remember` to refine future searches.
+20. **Preference review** — Recall all stored exclusions and preferences. Include a brief list in the monthly email so Darryl can confirm they're still accurate.
 
 ## Error Escalation
 

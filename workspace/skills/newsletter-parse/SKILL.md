@@ -35,9 +35,11 @@ Common patterns to look for:
 For each person extracted:
 
 1. Is the company a P&C insurer, broker, or reinsurer? If unclear, search: `web_search` for `"<company>" "property casualty" OR "P&C" insurance`
-2. Is the title a target title? (CDO, VP, Regional Director, AVP, BD, Underwriter)
+2. Do **not** require the normal daily-scout target titles for forwarded newsletters. Darryl explicitly asked to broaden "Comings & Goings" style lists to everyone in the U.S. on those lists, no matter the title.
 3. Is the person based in the United States? Check their geography, company office location, or role description. Anyone based outside the US (including US companies' international offices like London, Bermuda, Singapore) should be excluded. If geography is ambiguous from the newsletter text alone, flag for verification during enrichment (Step 3).
-4. If all are uncertain, mark as `needs_human_review` but still store the lead
+4. If the newsletter/source link is hard to read with `web_fetch`, use `browser` with `profile: "openclaw"` and an efficient AI snapshot. Firecrawl is not available.
+5. Store each possible U.S. P&C candidate with `lead_candidates_upsert`, `source_type: "newsletter"`, and a `qualification_score`.
+6. Continue to Apollo enrichment only when `qualification_score >= 60`; otherwise leave the candidate stored for review.
 
 ## Step 2.5: Resolve Pending Leads
 
@@ -45,7 +47,7 @@ Before enriching new leads, check existing `awaiting_phone` leads (same as daily
 
 1. Call `leads_search` with `status: "awaiting_phone"`
 2. Call `apollo_usage` to check budgets and expire old pending records
-3. For each `awaiting_phone` lead that has been resolved by webhook → note as "(sent earlier today)"
+3. For each `awaiting_phone` lead that has been resolved by webhook → include it in the next appropriate report, not as a separate immediate email
 4. For expired/failed pending leads → web search fallback for phone → update or mark `"needs_human_review"`
 
 ## Step 3: Enrich Each Lead via Apollo
@@ -55,11 +57,13 @@ For each person that passes the P&C filter:
 1. **LinkedIn:** `web_search` for `"<full name>" "<company>" site:linkedin.com/in`
 2. **Company HQ:** `web_search` for `"<company>" headquarters address insurance`
 3. **Geography:** Check the article, LinkedIn profile, or company website
-4. **Functional focus:** Infer from title (VP Distribution → distribution, AVP Underwriting → underwriting, etc.)
-5. **Apollo Enrichment:** Batch leads via `apollo_bulk_enrich` (groups of up to 10) with first_name, last_name, organization_name, domain (if known), linkedin_url (if known)
-6. Based on results:
+4. **Browser fallback:** For JS-heavy or blocked pages, use `browser` with `profile: "openclaw"` and `snapshotFormat: "ai"` to extract only the missing facts.
+5. **Functional focus:** Infer from title (VP Distribution → distribution, AVP Underwriting → underwriting, etc.)
+6. **Apollo Enrichment:** Batch leads via `apollo_bulk_enrich` (groups of up to 10) with first_name, last_name, organization_name, domain (if known), linkedin_url (if known), `source_type: "newsletter"`, `qualification_score`, and `qualification_reason`
+7. Based on results:
    - **`deliver: true`** → `leads_upsert` with email + phone + status `"new"`, include in reply CSV
-   - **`status: "awaiting_phone"`** → `leads_upsert` with email + status `"awaiting_phone"`. Phone will arrive via webhook and Darryl will be notified automatically.
+   - **`status: "awaiting_phone"`** → `leads_upsert` with email + status `"awaiting_phone"`. Phone webhook arrivals are stored silently and included in the next daily report.
+   - **`status: "qualification_rejected"`** → leave the candidate stored; do not retry Apollo without better evidence or explicit Darryl/Mindlink direction.
    - **`status: "no_email"` or `"no_match"`** → web search fallback (see lead-enrich skill for queries). Deliver only if BOTH email and phone found.
    - **`status: "budget_exhausted"`** → web search fallback for both email and phone
 
@@ -104,8 +108,9 @@ I processed the [Newsletter Name] digest you forwarded ([date]).
 Results:
 - Total people mentioned: [N]
 - Complete leads (email + phone): [N] — see attached CSV
-- Phone lookup in progress: [N] — you'll receive each automatically within ~15 minutes
-- Non-P&C or non-target skipped: [N]
+- Phone lookup in progress: [N] — these will be included once complete
+- Stored candidates below enrichment threshold: [N]
+- Non-P&C or low-confidence skipped: [N]
 - Non-US eliminated: [N]
 - Needs human review: [N]
 
@@ -114,7 +119,7 @@ Complete Leads:
 2. [Name] — [Title] @ [Company] (email + phone confirmed)
 ...
 
-Skipped (non-P&C or non-target title):
+Skipped (non-P&C, non-US, or low-confidence):
 - [Name] — [Title] @ [Company] (reason: life insurance only)
 ...
 ```

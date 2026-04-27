@@ -1,10 +1,18 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { SQLInputValue } from "node:sqlite";
 import type { UsageStats } from "./types.js";
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+
+function sqliteNumber(value: number | bigint | undefined): number {
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  return value ?? 0;
+}
 
 // ---------------------------------------------------------------------------
 // Pending phone record shape (returned by queries)
@@ -255,7 +263,7 @@ export class ApolloUsageDB {
          WHERE status = 'pending' AND requested_at < ?`,
       )
       .run(new Date().toISOString(), cutoff);
-    return result.changes;
+    return sqliteNumber(result.changes);
   }
 
   // ---- Usage stats ----
@@ -265,8 +273,10 @@ export class ApolloUsageDB {
     const asyncPhoneUsed = this.getAsyncPhoneUsedThisMonth();
     const ms = this.monthStart();
 
-    const q = (sql: string, ...args: unknown[]) =>
-      (this.db.prepare(sql).get(...args) as { cnt: number } | undefined)?.cnt ?? 0;
+    const q = (sql: string, ...args: SQLInputValue[]) => {
+      const row = this.db.prepare(sql).get(...args) as { cnt: number | bigint } | undefined;
+      return sqliteNumber(row?.cnt);
+    };
 
     return {
       month: this.currentMonth(),

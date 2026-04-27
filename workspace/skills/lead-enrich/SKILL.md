@@ -29,6 +29,7 @@ web_search: "<full name>" "<company>" site:linkedin.com/in
 ```
 
 If found, use `web_fetch` to read the public profile for additional details.
+If `web_fetch` is blocked or too thin, use `browser` with `profile: "openclaw"` and `snapshotFormat: "ai"` to extract only the public profile facts needed.
 
 ### Company HQ Address (if missing)
 
@@ -37,6 +38,7 @@ web_search: "<company>" headquarters address
 ```
 
 Check the company's official website, Wikipedia, or business directories.
+Use `browser` only when `web_fetch` cannot read the official site or directory page. Firecrawl is not available.
 
 ### Geography (if missing)
 
@@ -59,20 +61,23 @@ Infer from title and company context:
 
 ### Email + Phone — Apollo Enrichment (Primary)
 
-Before running manual web searches for email and phone, use Apollo as the primary enrichment source:
+Before running manual web searches for email and phone, use Apollo as the primary enrichment source only after the economical qualification gate:
 
 1. **Check current data** — does the lead already have both email AND phone?
    - Yes → skip Apollo, report "already fully enriched"
-   - Has email, no phone, status `"awaiting_phone"` → check if webhook has delivered (lead may have been promoted to `"new"` already). If still pending < 2h, tell Darryl "phone lookup in progress, will deliver automatically." If pending >= 2h, continue to web search fallback below.
+   - Has email, no phone, status `"awaiting_phone"` → check if webhook has delivered (lead may have been promoted to `"new"` already). If still pending < 2h, tell Darryl "phone lookup is in progress." If pending >= 2h, continue to web search fallback below.
    - Missing email or phone → continue to step 2
 
-2. **Check budget** — call `apollo_usage` to verify sync credits remain
+2. **Store/score candidate** — call `lead_candidates_upsert` with `source_type`, source evidence, missing fields, and `qualification_score`
 
-3. **Call `apollo_enrich`** with first_name, last_name, organization_name, domain (if known), linkedin_url (if known), internal_lead_id (the lead's ID from leads_search)
+3. **Check budget** — call `apollo_usage` to verify sync credits remain
 
-4. **Handle results:**
-   - **`deliver: true`** (both email + phone found) → `leads_upsert` with email + phone + status `"new"`. Email Darryl immediately with the complete lead.
-   - **`status: "awaiting_phone"`** (email found, async phone hunt triggered) → `leads_upsert` with email + status `"awaiting_phone"`. Tell Darryl: "Found email for [Name]. Phone lookup in progress — you'll receive the complete lead automatically when confirmed (usually within 15 minutes)."
+4. **Call `apollo_enrich`** with first_name, last_name, organization_name, domain (if known), linkedin_url (if known), internal_lead_id (the lead's ID from leads_search), `source_type`, `qualification_score`, and `qualification_reason`
+
+5. **Handle results:**
+   - **`deliver: true`** (both email + phone found) → `leads_upsert` with email + phone + status `"new"`. If Darryl directly asked for this specific enrichment, email him the complete lead; otherwise include it in the next report.
+   - **`status: "awaiting_phone"`** (email found, async phone hunt triggered) → `leads_upsert` with email + status `"awaiting_phone"`. Tell Darryl only if this was a direct reply: "Found email for [Name]. Phone lookup is in progress."
+   - **`status: "qualification_rejected"`** → do not retry Apollo with the same evidence; improve public-source validation or leave the candidate for review.
    - **`status: "no_email"` or `"no_match"`** → continue to manual web search below
    - **`status: "budget_exhausted"`** → continue to manual web search below
 
@@ -99,6 +104,7 @@ Only used when Apollo couldn't find data. Run these searches:
    web_search: "<company>" "contact us" OR "locations"
    ```
    Use `web_fetch` on the company contact page to find the relevant office number. Accept main office lines as a fallback — note the type in `notes` (e.g., `"phone: main office (Nashville)"`).
+   If `web_fetch` cannot extract the contact page, use `browser` with `profile: "openclaw"` and an efficient AI snapshot before giving up.
 
 **Email Pattern Inference** (when all web searches above fail):
 
@@ -131,7 +137,7 @@ Call `leads_upsert` with the newly found data. The dedup logic merges into the e
 If Darryl asked for this enrichment directly:
 
 - **Both email + phone found** → reply via `email_send` with the complete lead details
-- **Email found, phone pending** → reply: "Found email for [Name]. Phone lookup in progress — I'll send the complete lead as soon as it's confirmed."
+- **Email found, phone pending** → reply: "Found email for [Name]. Phone lookup is in progress. I'll include the complete lead once the phone is confirmed."
 - **Neither found** → reply with what data was gathered (LinkedIn, company HQ, geography) and note that contact details couldn't be verified from available sources
 
 ## Compliance Reminders

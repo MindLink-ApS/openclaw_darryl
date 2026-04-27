@@ -19,6 +19,7 @@
           "timezone": "America/Chicago"
         },
         "target": "none",
+        "model": "anthropic/claude-haiku-4.5",
         "lightContext": true
       }
     },
@@ -57,12 +58,42 @@
   "tools": {
     "web": {
       "search": {
-        "provider": "brave"
+        "enabled": true,
+        "maxResults": 10,
+        "cacheTtlMinutes": 60,
+        "timeoutSeconds": 30,
+        "perplexity": {
+          "model": "perplexity/sonar-pro"
+        }
       },
       "fetch": {
-        "enabled": true
+        "enabled": true,
+        "maxChars": 50000,
+        "maxCharsCap": 50000,
+        "cacheTtlMinutes": 60,
+        "timeoutSeconds": 30,
+        "maxRedirects": 5,
+        "userAgent": "Mozilla/5.0 (compatible; EmmaJonesLeadResearch/1.0; +https://openclaw-darryl.onrender.com)"
       }
     }
+  },
+  "browser": {
+    "enabled": true,
+    "evaluateEnabled": true,
+    "headless": true,
+    "noSandbox": true,
+    "defaultProfile": "openclaw",
+    "snapshotDefaults": {
+      "mode": "efficient"
+    },
+    "ssrfPolicy": {
+      "allowPrivateNetwork": false
+    },
+    "extraArgs": [
+      "--window-size=1365,768",
+      "--disable-dev-shm-usage",
+      "--disable-background-timer-throttling"
+    ]
   },
   "hooks": {
     "enabled": true,
@@ -115,7 +146,6 @@
           "asyncPhoneMonthlyLimit": 50,
           "webhookBaseUrl": "https://openclaw-darryl.onrender.com",
           "webhookSecret": "${APOLLO_WEBHOOK_SECRET}",
-          "hooksToken": "${HOOKS_TOKEN}",
           "dataDir": "/data/.openclaw/darryl/apollo",
           "leadsDbPath": "/data/.openclaw/darryl/leads.db"
         }

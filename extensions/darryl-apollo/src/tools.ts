@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AnyAgentTool } from "openclaw/plugin-sdk";
+import { optionalStringEnum, type AnyAgentTool } from "openclaw/plugin-sdk";
 import type { ApolloClient } from "./client.js";
 import { filterUsablePhones } from "./client.js";
 import type { ApolloUsageDB } from "./db.js";
@@ -15,6 +15,60 @@ function jsonResult(data: unknown): ToolResult {
 
 function usageStr(used: number, limit: number): string {
   return `${used}/${limit}`;
+}
+
+const SOURCE_TYPES = ["newsletter", "web", "referral", "manual"] as const;
+type SourceType = (typeof SOURCE_TYPES)[number];
+
+const QUALIFICATION_THRESHOLDS: Record<SourceType, number> = {
+  newsletter: 60,
+  web: 70,
+  referral: 65,
+  manual: 70,
+};
+
+function normalizeSourceType(value?: string): SourceType {
+  if (value && (SOURCE_TYPES as readonly string[]).includes(value)) {
+    return value as SourceType;
+  }
+  return "web";
+}
+
+function qualificationThreshold(sourceType?: string): number {
+  return QUALIFICATION_THRESHOLDS[normalizeSourceType(sourceType)];
+}
+
+function qualificationRejectedResult(params: {
+  score: number;
+  sourceType?: string;
+  syncUsed: number;
+  syncLimit: number;
+  asyncPhoneUsed: number;
+  asyncPhoneLimit: number;
+  reason?: string;
+}): EnrichmentResult | null {
+  const threshold = qualificationThreshold(params.sourceType);
+  if (params.score >= threshold) return null;
+  const sourceType = normalizeSourceType(params.sourceType);
+  return {
+    deliver: false,
+    email: null,
+    email_status: null,
+    phone: null,
+    phone_type: null,
+    phone_pending: false,
+    apollo_id: null,
+    status: "qualification_rejected",
+    sync_usage: usageStr(params.syncUsed, params.syncLimit),
+    async_phone_usage: usageStr(params.asyncPhoneUsed, params.asyncPhoneLimit),
+    note: [
+      `Skipped Apollo: qualification_score ${params.score}/100 is below ${threshold}/100 for ${sourceType} candidates.`,
+      params.reason ? `Reason: ${params.reason}` : "",
+      "Improve public-source validation or explicitly set force=true before spending credits.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -33,6 +87,29 @@ const ApolloEnrichParams = Type.Object(
     internal_lead_id: Type.Optional(
       Type.Number({ description: "Lead ID from leads database (if already stored)" }),
     ),
+    candidate_id: Type.Optional(
+      Type.Number({ description: "Candidate ID from lead_candidates_upsert" }),
+    ),
+    source_type: optionalStringEnum(SOURCE_TYPES, {
+      description: "Source type used for the qualification threshold",
+      default: "web",
+    }),
+    qualification_score: Type.Number({
+      description:
+        "0-100 pre-enrichment score from lead_candidates_upsert. Apollo is skipped below threshold.",
+      minimum: 0,
+      maximum: 100,
+    }),
+    qualification_reason: Type.Optional(
+      Type.String({ description: "Short reason for the score and spend decision" }),
+    ),
+    force: Type.Optional(
+      Type.Boolean({
+        description:
+          "Override the qualification threshold for explicit Darryl/Mindlink requests only.",
+        default: false,
+      }),
+    ),
   },
   { additionalProperties: false },
 );
@@ -47,6 +124,23 @@ const ApolloBulkEnrichParams = Type.Object(
         domain: Type.Optional(Type.String({ description: "Company domain" })),
         linkedin_url: Type.Optional(Type.String({ description: "LinkedIn URL" })),
         internal_lead_id: Type.Optional(Type.Number({ description: "Lead ID if already stored" })),
+        candidate_id: Type.Optional(Type.Number({ description: "Candidate ID" })),
+        source_type: optionalStringEnum(SOURCE_TYPES, {
+          description: "Source type used for the qualification threshold",
+          default: "web",
+        }),
+        qualification_score: Type.Number({
+          description: "0-100 pre-enrichment score. Apollo is skipped below threshold.",
+          minimum: 0,
+          maximum: 100,
+        }),
+        qualification_reason: Type.Optional(Type.String({ description: "Reason for the score" })),
+        force: Type.Optional(
+          Type.Boolean({
+            description: "Override qualification threshold for explicit requests only.",
+            default: false,
+          }),
+        ),
       }),
     ),
   },
@@ -95,11 +189,29 @@ export function createApolloTools(deps: {
     domain?: string;
     linkedin_url?: string;
     internal_lead_id?: number;
+    candidate_id?: number;
+    source_type?: SourceType;
+    qualification_score: number;
+    qualification_reason?: string;
+    force?: boolean;
   }): Promise<EnrichmentResult> {
     const { syncLimit, asyncPhoneLimit } = getLimits();
     const syncUsed = db.getSyncUsedThisMonth();
     const asyncPhoneUsed = db.getAsyncPhoneUsedThisMonth();
     const fullName = `${params.first_name} ${params.last_name}`;
+
+    if (!params.force) {
+      const rejected = qualificationRejectedResult({
+        score: params.qualification_score,
+        sourceType: params.source_type,
+        syncUsed,
+        syncLimit,
+        asyncPhoneUsed,
+        asyncPhoneLimit,
+        reason: params.qualification_reason,
+      });
+      if (rejected) return rejected;
+    }
 
     // Budget check
     if (syncUsed >= syncLimit) {
@@ -282,7 +394,7 @@ export function createApolloTools(deps: {
       status: "awaiting_phone",
       sync_usage: usageStr(syncUsed + 1, syncLimit),
       async_phone_usage: usageStr(asyncPhoneUsed + 1, asyncPhoneLimit),
-      note: "Async mobile lookup triggered. Lead will be sent to Darryl automatically when phone arrives (typically 5-15 minutes). Store this lead as status 'awaiting_phone' now.",
+      note: "Async mobile lookup triggered. Store this lead as status 'awaiting_phone' now. Webhook phone arrivals update the DB silently and should be included in the next daily report.",
     };
   }
 
@@ -294,12 +406,14 @@ export function createApolloTools(deps: {
       label: "Apollo Enrich",
       description: [
         "Enrich a single person via Apollo.io — returns verified email and phone number.",
+        "Requires a pre-enrichment qualification_score from lead_candidates_upsert.",
+        "Skips Apollo before spending credits when score is below the source-specific threshold.",
         "Uses hybrid sync+async: sync call gets email + cached phone (1 credit).",
         "If no phone found, automatically triggers async mobile hunt via webhook.",
         "Returns deliver=true ONLY when both email and phone are found.",
         "When deliver=false and status='awaiting_phone', upsert the lead with the email",
         "and status_pipeline='awaiting_phone'. The phone will arrive via webhook and",
-        "Darryl will be notified automatically.",
+        "the lead should stay silent until the next daily report or Darryl's direct reply flow.",
       ].join(" "),
       parameters: ApolloEnrichParams,
       async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
@@ -310,6 +424,11 @@ export function createApolloTools(deps: {
           domain?: string;
           linkedin_url?: string;
           internal_lead_id?: number;
+          candidate_id?: number;
+          source_type?: SourceType;
+          qualification_score: number;
+          qualification_reason?: string;
+          force?: boolean;
         };
         try {
           const result = await enrichOne(p);
@@ -325,6 +444,8 @@ export function createApolloTools(deps: {
       label: "Apollo Bulk Enrich",
       description: [
         "Enrich up to 10 people via Apollo.io in one batch call.",
+        "Requires each person to include qualification_score from lead_candidates_upsert.",
+        "Skips low-confidence candidates before spending Apollo credits.",
         "Same hybrid sync+async logic as apollo_enrich for each person.",
         "Returns results grouped: complete (deliver now), awaiting_phone (held),",
         "and failed (no match). Respects monthly sync and async phone budgets.",
@@ -339,6 +460,11 @@ export function createApolloTools(deps: {
             domain?: string;
             linkedin_url?: string;
             internal_lead_id?: number;
+            candidate_id?: number;
+            source_type?: SourceType;
+            qualification_score: number;
+            qualification_reason?: string;
+            force?: boolean;
           }>;
         };
 
@@ -353,34 +479,55 @@ export function createApolloTools(deps: {
           const syncUsed = db.getSyncUsedThisMonth();
           const asyncPhoneUsed = db.getAsyncPhoneUsedThisMonth();
           const budgetRemaining = syncLimit - syncUsed;
+          const qualificationRejected: EnrichmentResult[] = [];
+          const qualifiedInput = p.leads.filter((lead) => {
+            if (lead.force) return true;
+            const rejected = qualificationRejectedResult({
+              score: lead.qualification_score,
+              sourceType: lead.source_type,
+              syncUsed,
+              syncLimit,
+              asyncPhoneUsed,
+              asyncPhoneLimit,
+              reason: lead.qualification_reason,
+            });
+            if (rejected) {
+              qualificationRejected.push(rejected);
+              return false;
+            }
+            return true;
+          });
 
           if (budgetRemaining <= 0) {
             return jsonResult({
               complete: [],
               awaiting_phone: [],
-              failed: p.leads.map((l) => ({
-                deliver: false,
-                email: null,
-                email_status: null,
-                phone: null,
-                phone_type: null,
-                phone_pending: false,
-                apollo_id: null,
-                status: "budget_exhausted" as const,
-                sync_usage: usageStr(syncUsed, syncLimit),
-                async_phone_usage: usageStr(asyncPhoneUsed, asyncPhoneLimit),
-                note: "Sync enrichment limit reached. Use web search as fallback.",
-              })),
+              failed: [
+                ...qualificationRejected,
+                ...qualifiedInput.map(() => ({
+                  deliver: false,
+                  email: null,
+                  email_status: null,
+                  phone: null,
+                  phone_type: null,
+                  phone_pending: false,
+                  apollo_id: null,
+                  status: "budget_exhausted" as const,
+                  sync_usage: usageStr(syncUsed, syncLimit),
+                  async_phone_usage: usageStr(asyncPhoneUsed, asyncPhoneLimit),
+                  note: "Sync enrichment limit reached. Use web search as fallback.",
+                })),
+              ],
               sync_usage: usageStr(syncUsed, syncLimit),
               async_phone_usage: usageStr(asyncPhoneUsed, asyncPhoneLimit),
-              summary: `0 complete, 0 awaiting phone, ${p.leads.length} budget exhausted`,
+              summary: `0 complete, 0 awaiting phone, ${qualifiedInput.length} budget exhausted, ${qualificationRejected.length} skipped by qualification gate`,
             });
           }
 
           // Filter out already-enriched leads BEFORE budget slicing (don't waste budget slots on dupes)
-          const freshLeads: typeof p.leads = [];
-          const dedupResults: EnrichmentResult[] = [];
-          for (const lead of p.leads) {
+          const freshLeads: typeof qualifiedInput = [];
+          const dedupResults: EnrichmentResult[] = [...qualificationRejected];
+          for (const lead of qualifiedInput) {
             const fullName = `${lead.first_name} ${lead.last_name}`;
             if (db.isAlreadyEnrichedThisMonth(fullName, lead.organization_name)) {
               dedupResults.push({
@@ -549,7 +696,7 @@ export function createApolloTools(deps: {
                 status: "awaiting_phone",
                 sync_usage: "",
                 async_phone_usage: "",
-                note: "Async mobile lookup triggered. Phone arrives via webhook (~5-15 min).",
+                note: "Async mobile lookup triggered. Webhook phone arrivals update the DB silently and should be included in the next daily report.",
               });
             }
 

@@ -5,6 +5,8 @@ import type { AnyAgentTool } from "openclaw/plugin-sdk";
 import { generateCsv } from "./csv.js";
 import type { LeadsDB } from "./db.js";
 import {
+  LeadCandidateSearchParams,
+  LeadCandidateUpsertParams,
   LeadExportCsvParams,
   LeadGetParams,
   LeadRecordContactParams,
@@ -70,8 +72,59 @@ type ExportCsvParams = {
   require_contact?: boolean;
 };
 
+type CandidateUpsertParams = {
+  full_name: string;
+  current_company: string;
+  source_url: string;
+  current_title?: string;
+  source_label?: string;
+  source_published_date?: string;
+  geography?: string;
+  is_us_based?: boolean;
+  pc_relevance?: string;
+  title_match?: boolean;
+  source_type?: "newsletter" | "web" | "referral" | "manual";
+  qualification_score?: number;
+  qualification_status?: "candidate" | "qualified" | "rejected" | "enriched";
+  missing_fields?: string[];
+  notes?: string;
+};
+
+type CandidateSearchParams = {
+  status?: "candidate" | "qualified" | "rejected" | "enriched";
+  source_type?: "newsletter" | "web" | "referral" | "manual";
+  min_score?: number;
+  limit?: number;
+  offset?: number;
+};
+
 export function createLeadsTools(db: LeadsDB): AnyAgentTool[] {
   return [
+    {
+      name: "lead_candidates_upsert",
+      label: "Lead Candidates Upsert",
+      description:
+        "Store cheap pre-enrichment research before spending Apollo credits. " +
+        "Use this for every discovered person before apollo_enrich. " +
+        "Set qualification_score 0-100 and qualification_status based on U.S. fit, P&C relevance, recency, source quality, and duplicate risk.",
+      parameters: LeadCandidateUpsertParams,
+      async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
+        const result = db.upsertCandidate(rawParams as CandidateUpsertParams);
+        return jsonResult(result);
+      },
+    },
+    {
+      name: "lead_candidates_search",
+      label: "Lead Candidates Search",
+      description:
+        "Search pre-enrichment lead candidates by status, source type, or minimum qualification score. " +
+        "Use this to avoid duplicate research and to review candidates before Apollo spend.",
+      parameters: LeadCandidateSearchParams,
+      async execute(_toolCallId: string, rawParams: unknown): Promise<ToolResult> {
+        const candidates = db.searchCandidates(rawParams as CandidateSearchParams);
+        return jsonResult({ count: candidates.length, candidates });
+      },
+    },
     {
       name: "leads_upsert",
       label: "Leads Upsert",

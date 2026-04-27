@@ -4,6 +4,13 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { checkInbox } from "./src/inbox.js";
 import { createTransporter, sendEmail, sendEmailWithCsv, type SmtpConfig } from "./src/send.js";
 
+function jsonResult(payload: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+    details: payload,
+  };
+}
+
 const plugin = {
   id: "darryl-email",
   name: "Darryl Email",
@@ -80,14 +87,7 @@ const plugin = {
           cc: p.cc,
           bcc: p.bcc,
         });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ success: true, ...result }),
-            },
-          ],
-        };
+        return jsonResult({ success: true, ...result });
       },
     });
 
@@ -125,14 +125,7 @@ const plugin = {
           cc: p.cc,
           bcc: p.bcc,
         });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ success: true, ...result }),
-            },
-          ],
-        };
+        return jsonResult({ success: true, ...result });
       },
     });
 
@@ -154,22 +147,13 @@ const plugin = {
         const p = params as { max_results?: number };
         const account = smtpConfig.user;
         if (!account) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  success: false,
-                  error: "No Gmail account configured (SMTP user not set)",
-                }),
-              },
-            ],
-          };
+          return jsonResult({
+            success: false,
+            error: "No Gmail account configured (SMTP user not set)",
+          });
         }
         const result = await checkInbox(account, p.max_results ?? 50);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result) }],
-        };
+        return jsonResult(result);
       },
     });
 

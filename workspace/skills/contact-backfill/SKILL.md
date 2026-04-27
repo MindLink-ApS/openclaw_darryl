@@ -53,6 +53,7 @@ Also try:
 
 - Company "Contact Us" or "Locations" page: `web_search: "<company>" "contact us" OR "locations"`
 - Use `web_fetch` on the company website contact page to find regional office numbers
+- If `web_fetch` is blocked or too thin, use `browser` with `profile: "openclaw"` and an efficient AI snapshot. Firecrawl is not available.
 
 ### 2c. Validation and Storage
 

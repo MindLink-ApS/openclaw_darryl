@@ -60,7 +60,14 @@ For each match, extract: full name, title, company, geography, dates, LinkedIn U
 
 ### 5. ENRICH
 
-Add functional focus, HQ address, and contact details via Apollo enrichment:
+Before any paid enrichment, store the person with `lead_candidates_upsert` and assign a `qualification_score` (0-100):
+
+- **Daily web scout threshold:** spend Apollo credits only at `qualification_score >= 70`
+- **Forwarded newsletter threshold:** spend Apollo credits at `qualification_score >= 60` because Darryl explicitly asked to broaden "Comings & Goings" style lists
+- Score based on U.S. evidence, P&C relevance, source reliability, move recency, duplicate risk, and whether required fields are known
+- If below threshold, store as `qualification_status: "rejected"` or `"candidate"` and do not call Apollo
+
+Add functional focus, HQ address, and contact details via Apollo enrichment only after the qualification gate passes:
 
 - **Primary:** Use `apollo_enrich` (single) or `apollo_bulk_enrich` (batch of up to 10) for email + phone. See "Apollo Enrichment & Delivery Rules" below for the full flow.
 - **Fallback:** If Apollo returns `no_email`, `no_match`, or `budget_exhausted`, search company leadership/team pages, industry directories (AM Best, NAIC), conference speaker bios, and press release contact sections.
@@ -79,7 +86,7 @@ After discovery, use `leads_export_csv` to generate a CSV containing ONLY leads 
 
 ---
 
-## Query Templates (Brave Search)
+## Query Templates (Web Search)
 
 Use these query patterns with the `web_search` tool:
 
@@ -99,6 +106,18 @@ Also search LinkedIn public content:
 site:linkedin.com/in "property casualty" OR "P&C" "joined" OR "new role" 2026
 site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
 ```
+
+---
+
+## Internet Research Stack
+
+Use the cheapest reliable path first:
+
+1. `web_search` for broad discovery and quick citations. It auto-picks the available provider; Brave is preferred when `BRAVE_API_KEY` exists, otherwise OpenRouter-backed Perplexity can be used from the existing `OPENROUTER_API_KEY`.
+2. `web_fetch` for known article, profile, company, directory, and contact URLs. Use it before Apollo when the page is readable over HTTP.
+3. `browser` with `profile: "openclaw"` for JS-heavy, blocked, or thin pages. Start with `action: "open"`, then `action: "snapshot"` using `snapshotFormat: "ai"` and `mode: "efficient"`. Use browser only when search/fetch cannot extract enough evidence.
+
+Firecrawl is not available. Do not mention it, request it, or wait for it. If `web_fetch` fails, use the browser tool or another public source.
 
 ---
 
@@ -296,10 +315,10 @@ When Darryl forwards a "Comings & Goings" or similar newsletter digest:
 2. For each person found:
    a. Search web for verification and additional details
    b. Validate they are P&C (not life/health-only)
-   c. Check if their title matches target titles
+   c. Do not require target-title matching for forwarded "Comings & Goings" style lists; Darryl wants U.S. people from those lists regardless of title
    d. Look up LinkedIn profile
    e. Look up company HQ address
-   f. Store via `leads_upsert` with source pointing to the newsletter
+   f. Store a pre-enrichment candidate via `lead_candidates_upsert`; only use `leads_upsert` after validation/enrichment
 3. Reply via email with a summary of extracted leads and any that need review
 
 ---
@@ -406,6 +425,16 @@ Use `mem0_recall` before each interaction to load relevant context.
 
 ## Apollo Enrichment & Delivery Rules
 
+### Economic Qualification Gate (STRICT)
+
+- Never call `apollo_enrich` or `apollo_bulk_enrich` until the person has been recorded with `lead_candidates_upsert`
+- Always pass `qualification_score`, `source_type`, and `qualification_reason` into Apollo tools
+- For daily web discovery, Apollo requires `qualification_score >= 70`
+- For Darryl-forwarded newsletters / "Comings & Goings" lists, Apollo requires `qualification_score >= 60`
+- If Apollo returns `qualification_rejected`, improve public-source validation or leave the candidate stored for review; do not retry paid enrichment with the same evidence
+- Use `mem0_recall` before scoring to apply Darryl's preferences, accepted/rejected patterns, and source-quality notes
+- Use `web_fetch` for known source URLs before paid enrichment. If it fails or returns too little content, use `browser` on the same URL and take an efficient AI snapshot before paid enrichment.
+
 ### Delivery Gate (STRICT — no exceptions)
 
 - A lead is delivered to Darryl ONLY when it has BOTH verified email AND usable phone number
@@ -414,7 +443,7 @@ Use `mem0_recall` before each interaction to load relevant context.
 
 ### Enrichment Flow
 
-- Every new lead gets a 1-credit sync Apollo enrichment via `apollo_enrich` (email + cached phones)
+- Every candidate that passes the qualification gate gets a 1-credit sync Apollo enrichment via `apollo_enrich` (email + cached phones)
 - Both email and phone found → status `"new"`, include in the next daily report
 - Email only, no phone → auto-trigger async mobile hunt (1 mobile credit), store lead as `"awaiting_phone"`, DO NOT deliver yet
 - Neither found → web search fallback for both, deliver only if BOTH found
