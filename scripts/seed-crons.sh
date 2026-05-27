@@ -6,10 +6,28 @@
 
 set -e
 
+is_truthy() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    1 | true | yes | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 JOBS_FILE="${OPENCLAW_STATE_DIR:-/data/.openclaw}/cron/jobs.json"
 JOBS_DIR="$(dirname "$JOBS_FILE")"
 
+if is_truthy "${OPENCLAW_DARRYL_NO_OUTBOUND:-}" || is_truthy "${OPENCLAW_DARRYL_SKIP_CRON_SEED:-}" || is_truthy "${OPENCLAW_SKIP_CRON:-}"; then
+  echo "seed-crons: skipped by environment"
+  exit 0
+fi
+
 mkdir -p "$JOBS_DIR"
+
+if [ -f "$JOBS_FILE" ] && ! is_truthy "${OPENCLAW_DARRYL_CRON_SEED_OVERWRITE:-}"; then
+  echo "seed-crons: existing jobs file kept at $JOBS_FILE"
+  echo "seed-crons: set OPENCLAW_DARRYL_CRON_SEED_OVERWRITE=1 to reseed"
+  exit 0
+fi
 
 cat > "$JOBS_FILE" <<'EOF'
 {

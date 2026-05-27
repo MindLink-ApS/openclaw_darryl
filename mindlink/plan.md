@@ -22,21 +22,23 @@ These fields are mirrored to ClickUp. Keep them compact.
 
 ## Taskqueue
 
-| ID     | Status  | Task                                             | Owner         | Acceptance Criteria                         | Evidence       |
-| ------ | ------- | ------------------------------------------------ | ------------- | ------------------------------------------- | -------------- |
-| TQ-001 | review  | Review gap assessment and legacy truth inventory | Atlas         | No old mission/PRD/spec is orphaned         | `evidence.md`  |
-| TQ-002 | pending | Confirm active client milestone and deadline     | Atlas         | ClickUp dashboard agrees with this plan     | ClickUp card   |
-| TQ-003 | pending | Run Forge runner doctor for this repo            | Forge         | Codex auth and repo secret isolation pass   | doctor output  |
-| TQ-004 | pending | Approve first Forge/Codex work pack              | Atlas + human | Work pack names allowed files, QA, rollback | Slack approval |
+| ID     | Status  | Task                                             | Owner         | Acceptance Criteria                                                    | Evidence                       |
+| ------ | ------- | ------------------------------------------------ | ------------- | ---------------------------------------------------------------------- | ------------------------------ |
+| TQ-001 | review  | Review gap assessment and legacy truth inventory | Atlas         | No old mission/PRD/spec is orphaned                                    | `evidence.md`                  |
+| TQ-002 | pending | Confirm active client milestone and deadline     | Atlas         | ClickUp dashboard agrees with this plan                                | ClickUp card                   |
+| TQ-003 | pending | Run Forge runner doctor for this repo            | Forge         | Codex auth and repo secret isolation pass                              | doctor output                  |
+| TQ-004 | pending | Approve first Forge/Codex work pack              | Atlas + human | Work pack names allowed files, QA, rollback                            | Slack approval                 |
+| TQ-005 | review  | Prepare Darryl HERMES/GCP cutover pack           | Forge/Codex   | Runbook, no-outbound guards, URL parameterization, and tests are ready | `darryl-hermes-gcp-runbook.md` |
 
 Status values: `pending`, `in_progress`, `review`, `blocked`, `done`.
 
 ## Milestones
 
-| Milestone               | Target Date | Status  | Notes                          |
-| ----------------------- | ----------- | ------- | ------------------------------ |
-| Project truth migration | TBD         | review  | Legacy docs preserved in place |
-| Factory readiness       | TBD         | pending | Requires doctor pass           |
+| Milestone                 | Target Date | Status  | Notes                                     |
+| ------------------------- | ----------- | ------- | ----------------------------------------- |
+| Project truth migration   | TBD         | review  | Legacy docs preserved in place            |
+| Factory readiness         | TBD         | pending | Requires doctor pass                      |
+| Darryl HERMES/GCP cutover | TBD         | review  | Needs credentialed audit and VM execution |
 
 ## Risks And Blockers
 

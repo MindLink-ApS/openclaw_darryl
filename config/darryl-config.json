@@ -2,7 +2,7 @@
   "gateway": {
     "mode": "local",
     "controlUi": {
-      "allowedOrigins": ["https://openclaw-darryl.onrender.com"],
+      "allowedOrigins": ["${DARRYL_PUBLIC_BASE_URL}"],
       "dangerouslyDisableDeviceAuth": true
     }
   },
@@ -73,7 +73,7 @@
         "cacheTtlMinutes": 60,
         "timeoutSeconds": 30,
         "maxRedirects": 5,
-        "userAgent": "Mozilla/5.0 (compatible; EmmaJonesLeadResearch/1.0; +https://openclaw-darryl.onrender.com)"
+        "userAgent": "Mozilla/5.0 (compatible; EmmaJonesLeadResearch/1.0; +${DARRYL_PUBLIC_BASE_URL})"
       }
     }
   },
@@ -144,7 +144,7 @@
           "apiKey": "${APOLLO_API_KEY}",
           "syncMonthlyLimit": 100,
           "asyncPhoneMonthlyLimit": 50,
-          "webhookBaseUrl": "https://openclaw-darryl.onrender.com",
+          "webhookBaseUrl": "${DARRYL_PUBLIC_BASE_URL}",
           "webhookSecret": "${APOLLO_WEBHOOK_SECRET}",
           "dataDir": "/data/.openclaw/darryl/apollo",
           "leadsDbPath": "/data/.openclaw/darryl/leads.db"

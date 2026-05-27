@@ -22,16 +22,17 @@ If ClickUp disagrees with `/mindlink/plan.md`, `/mindlink` wins.
 
 ## Files
 
-| File                      | Purpose                                                 | Primary writer      |
-| ------------------------- | ------------------------------------------------------- | ------------------- |
-| `vision.md`               | Long-term client/project success definition             | Atlas + humans      |
-| `context.md`              | Current truth, constraints, non-goals, key links        | Atlas               |
-| `plan.md`                 | Milestones, taskqueue, acceptance criteria, progress %  | Atlas + Forge/Codex |
-| `development-manifest.md` | Architecture, commands, QA/deploy rules                 | Forge/Codex         |
-| `decisions.md`            | Approved decisions with source links                    | Atlas               |
-| `evidence.md`             | Index of Google/GitHub/Slack evidence; links, not dumps | Atlas               |
-| `skills.md`               | Required reasoning lenses and when to use them          | Humans + Atlas      |
-| `timesheet.md`            | Lightweight work evidence from Calendar/GitHub          | Atlas               |
+| File                           | Purpose                                                 | Primary writer      |
+| ------------------------------ | ------------------------------------------------------- | ------------------- |
+| `vision.md`                    | Long-term client/project success definition             | Atlas + humans      |
+| `context.md`                   | Current truth, constraints, non-goals, key links        | Atlas               |
+| `plan.md`                      | Milestones, taskqueue, acceptance criteria, progress %  | Atlas + Forge/Codex |
+| `development-manifest.md`      | Architecture, commands, QA/deploy rules                 | Forge/Codex         |
+| `darryl-hermes-gcp-runbook.md` | Darryl HERMES/GCP cutover and validation runbook        | Atlas + Forge/Codex |
+| `decisions.md`                 | Approved decisions with source links                    | Atlas               |
+| `evidence.md`                  | Index of Google/GitHub/Slack evidence; links, not dumps | Atlas               |
+| `skills.md`                    | Required reasoning lenses and when to use them          | Humans + Atlas      |
+| `timesheet.md`                 | Lightweight work evidence from Calendar/GitHub          | Atlas               |
 
 ## Anti-Bloat Rules
 

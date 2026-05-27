@@ -8,8 +8,27 @@
 
 set -e
 
-# 1. Seed recurring cron jobs into persistent state
-sh /app/scripts/seed-crons.sh
+is_truthy() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    1 | true | yes | on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if is_truthy "${OPENCLAW_DARRYL_NO_OUTBOUND:-}"; then
+  echo "start.sh: OPENCLAW_DARRYL_NO_OUTBOUND enabled; disabling cron and Gmail watcher"
+  export OPENCLAW_SKIP_CRON=1
+  export OPENCLAW_SKIP_GMAIL_WATCHER=1
+fi
+
+# 1. Seed recurring cron jobs into persistent state unless this is a migration
+# or audit boot. Seeding is intentionally skipped in no-outbound mode so a new
+# host can validate state without scheduling Darryl-facing work.
+if is_truthy "${OPENCLAW_DARRYL_SKIP_CRON_SEED:-}" || is_truthy "${OPENCLAW_DARRYL_NO_OUTBOUND:-}"; then
+  echo "start.sh: skipping cron seed"
+else
+  sh /app/scripts/seed-crons.sh
+fi
 
 # 2. Start gateway in background
 echo "start.sh: launching gateway..."
@@ -35,8 +54,12 @@ done
 
 if [ "$READY" = "1" ]; then
   # 4. Trigger immediate daily-scout run (catch-up email to Darryl)
-  echo "start.sh: triggering immediate daily-scout run..."
-  (sleep 5 && node /app/openclaw.mjs cron run daily-scout 2>&1 || echo "start.sh: cron run daily-scout failed (non-fatal)") &
+  if is_truthy "${OPENCLAW_DARRYL_NO_OUTBOUND:-}" || is_truthy "${OPENCLAW_DARRYL_SKIP_KICKSTART:-}"; then
+    echo "start.sh: skipping immediate daily-scout run"
+  else
+    echo "start.sh: triggering immediate daily-scout run..."
+    (sleep 5 && node /app/openclaw.mjs cron run daily-scout 2>&1 || echo "start.sh: cron run daily-scout failed (non-fatal)") &
+  fi
 else
   echo "start.sh: WARNING — gateway did not become healthy within 120s. Skipping kick-start."
 fi
