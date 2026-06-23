@@ -1,0 +1,19 @@
+name: emma-leads
+version: 0.1.0
+author: Mindlink
+description: >
+  P&C executive-move lead engine for Emma Jones — discovery (people-moves RSS
+  feeds), dedup (identity + URL + watermark), and RocketReach→Apollo contact
+  enrichment. Replaces the OpenClaw leads/Apollo plugin.
+provides_tools:
+  - enrich_contact
+requires_env:
+  - name: ROCKETREACH_API_KEY
+    description: "RocketReach API key — primary contact enrichment (email/phone)"
+    url: "https://rocketreach.co/api"
+    secret: true
+optional_env:
+  - name: APOLLO_API_KEY
+    description: "Apollo API key — fallback enrichment for email/phone RocketReach missed"
+    url: "https://apollo.io/"
+    secret: true

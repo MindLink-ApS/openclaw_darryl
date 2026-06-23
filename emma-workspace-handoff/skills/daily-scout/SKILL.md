@@ -1,0 +1,241 @@
+---
+name: daily-scout
+description: Run the daily P&C insurance executive move discovery. Searches trade journals, company newsrooms, and LinkedIn for executive job changes in the last 60 days, validates and stores leads, then emails a CSV report to Darryl.
+metadata:
+  openclaw:
+    emoji: "🔍"
+    always: true
+---
+
+# Daily Discovery — P&C Executive Move Discovery
+
+Run this skill when triggered by the daily cron job or when Darryl asks you to search for new leads.
+
+## Search Pacing (Brave Search Free Plan)
+
+To avoid hitting the Brave Search free plan rate limit:
+
+1. Space web search queries at least 5 minutes apart
+2. Run discovery searches over a 2-hour window (e.g., 4:00–6:00 AM CT)
+3. Compile all results into the single daily report — do not send partial results
+4. If a search fails due to rate limiting, wait 5 minutes and retry once before skipping
+
+This pacing means the daily-scout skill should be triggered early enough to complete its 2-hour search window before the 6 AM CT report deadline.
+
+## Step 0: Recall Preferences & Exclusions
+
+Before searching, load Darryl's feedback and preferences:
+
+1. Call `mem0_recall` with query `"EXCLUSION lead preferences feedback"` to retrieve stored exclusions
+2. Call `mem0_recall` with query `"GOOD PATTERN source quality"` to retrieve positive patterns and source ratings
+3. Apply all `EXCLUSION:` results as filters during Step 2 processing (e.g., skip certain titles, companies, or insurance lines Darryl has rejected)
+4. Prioritize sources and patterns flagged as `GOOD PATTERN:` or high-quality `SOURCE QUALITY:`
+
+## Step 1: Search Sources
+
+Before broad searches, pull the high-signal list pages that Darryl explicitly cares about. These cost less than broad search and catch people who may not rank in search yet.
+
+### Direct list pulls
+
+1. Use `web_fetch` on `https://www.businessinsurance.com/`.
+2. Find the `Comings and Goings` section and extract every linked person in that block.
+3. Visit each person profile with `web_fetch`; if fetch returns thin/blocked content, use `browser` with `profile: "openclaw"` and an efficient AI snapshot.
+4. For every Business Insurance profile, extract name, company, title/body role, sector, source date, and source URL.
+5. Apply the broad "Comings & Goings" rule Darryl requested:
+   - Do not require target-title matching.
+   - Require U.S. evidence or store `missing_fields: ["geography"]` and verify before Apollo.
+   - Require P&C relevance through the sector, company description, or a second public source.
+   - Store with `lead_candidates_upsert`, `source_type: "newsletter"`, `source_label: "Business Insurance - Comings & Goings"`, and a qualification reason.
+   - Continue to Apollo only when `qualification_score >= 60`.
+6. If the homepage section is absent, fetch `https://www.businessinsurance.com/ppl/` and process the newest Comings & Goings profiles the same way.
+
+Run these web searches in sequence after direct list pulls. For each, use the `web_search` tool:
+
+### Trade journals (highest yield)
+
+```
+"property casualty" OR "P&C" "joined" OR "appointed" OR "promoted" site:insurancejournal.com
+"property casualty" insurance "new role" OR "hired" OR "joins" site:businessinsurance.com
+"property casualty" "vice president" OR "AVP" OR "director" "appointed" site:carriermanagement.com
+P&C insurance executive "new position" OR "new role" site:propertycasualty360.com
+"property casualty" insurance "people moves" OR "comings and goings" site:ambest.com
+```
+
+### Company newsrooms
+
+```
+insurance "chief development officer" OR "head of development" appointed OR hired 2026
+P&C "regional director" OR "assistant vice president" new role OR joined 2026
+insurance "underwriting leader" OR "senior underwriter" promoted OR appointed 2026
+```
+
+### LinkedIn public content
+
+```
+site:linkedin.com/posts "excited to announce" insurance "property casualty" 2026
+site:linkedin.com/posts "thrilled to join" P&C insurance 2026
+site:linkedin.com/in "property casualty" OR "P&C" "joined" OR "new role" 2026
+```
+
+### Press releases & SEC filings
+
+```
+"property casualty" insurance "press release" "appointed" OR "named" OR "promoted" 2026
+insurance executive appointment site:sec.gov "Form 8-K" 2026
+P&C insurance "names" OR "appoints" "chief" OR "vice president" site:prnewswire.com 2026
+P&C insurance "names" OR "appoints" "chief" OR "vice president" site:businesswire.com 2026
+```
+
+### Local business journals
+
+```
+insurance executive "joins" OR "appointed" OR "promoted" site:bizjournals.com 2026
+```
+
+## Step 2: Process Each Result
+
+For every search result that looks relevant:
+
+1. Use `web_fetch` to read the full article/page
+   - If `web_fetch` fails, is blocked, or returns thin content, use `browser` with `profile: "openclaw"` on the same URL and take an efficient AI snapshot.
+   - Do not use Firecrawl; it is not available.
+2. Extract: full name, new title, new company, effective date, source URL
+3. **Filter check:**
+   - Is this P&C insurance? (not life/health-only) → skip if no
+   - Is the title one of our targets? (CDO, VP, Regional Director, AVP, BD, Underwriter) → skip if no
+   - Is the move within 60 days? → skip if no
+4. If passes all filters, call `lead_candidates_upsert` before any Apollo spend:
+   - `source_type: "web"`
+   - `qualification_score`: 0-100 based on U.S. evidence, P&C relevance, target-title fit, source reliability, recency, and duplicate risk
+   - `qualification_status: "qualified"` only when score is 70+
+   - `missing_fields`: include any of `linkedin_url`, `company_domain`, `geography`, `source_date`, `title`
+5. Continue to enrichment only when `qualification_score >= 70`. Otherwise keep the candidate stored and skip Apollo.
+
+## Step 3: Resolve Pending Leads (BEFORE new discovery)
+
+Before enriching new leads, check all leads stuck in `awaiting_phone` status:
+
+1. Call `leads_search` with `status: "awaiting_phone"` to find pending leads
+2. Call `apollo_usage` to check budget status AND expire pending records older than 2 hours
+3. For each `awaiting_phone` lead:
+   - If the webhook already delivered the phone (lead now has `mobile_phone` populated and status was promoted to `"new"` by the webhook handler) → include it in the next daily report if it has not already appeared in a prior report.
+   - If still awaiting AND pending < 2 hours → leave alone, webhook may still arrive
+   - If pending >= 2 hours or expired → web search fallback for phone:
+
+     ```
+     web_search: "<full name>" "<company>" phone OR "direct line" OR "contact"
+     web_search: "<company>" "leadership" OR "directory" phone
+     ```
+
+     - Phone found via web? → `leads_upsert` with phone + status `"new"`, deliver in today's report
+     - Still no phone? → `leads_update_pipeline` to `"needs_human_review"`, never deliver
+
+## Step 4: Enrich Each New Lead via Apollo
+
+For each validated lead from Step 2:
+
+1. Search for their LinkedIn profile: `web_search` for `"<full name>" "<company>" site:linkedin.com`
+2. Search for company HQ: `web_search` for `"<company>" headquarters address`
+3. Look for geography info in the article or company page
+4. If LinkedIn, company, or source pages are JS-heavy or blocked to `web_fetch`, use `browser` with `profile: "openclaw"` and `snapshotFormat: "ai"` to extract only the needed facts.
+5. Determine functional focus from title/context (distribution, underwriting, claims, etc.)
+
+### Apollo Enrichment (replaces manual email/phone search)
+
+6. Call `apollo_enrich` (or batch up to 10 leads with `apollo_bulk_enrich`) with `first_name`, `last_name`, `organization_name`, `domain` (if known), `linkedin_url` (if known), `source_type: "web"`, `qualification_score`, and `qualification_reason`.
+7. Based on the result:
+   - **`deliver: true` (complete — both email + phone found):**
+     Call `leads_upsert` with all fields including `email_address`, `mobile_phone`, `status_pipeline: "new"`. Add to today's report.
+   - **`status: "awaiting_phone"` (email found, async phone hunt triggered):**
+     Call `leads_upsert` with email, `status_pipeline: "awaiting_phone"`. DO NOT include in today's report. The phone may arrive via webhook and will be stored silently for a later daily report.
+   - **`status: "qualification_rejected"`:**
+     Do not retry Apollo. Leave the candidate stored for review or improve public-source validation first.
+   - **`status: "no_email"` or `"no_match"` (Apollo couldn't find them):**
+     Fall back to manual web search for email and phone (existing queries from lead-enrich skill). If BOTH found → `leads_upsert` status `"new"`, deliver. If not both → `leads_upsert` status `"needs_human_review"`.
+   - **`status: "budget_exhausted"`:**
+     Fall back to manual web search for both email and phone. Note budget status internally.
+
+8. **Validate any contact details** — whether from Apollo or web search:
+   - Confirm email domain matches company domain
+   - Never adopt generic addresses (info@, contact@, hr@)
+   - Never guess patterns — only use explicitly published or Apollo-verified values
+   - Record source URLs for web-sourced contacts
+
+## Step 5: Store Leads
+
+For each enriched lead, call `leads_upsert` with all available fields. Set `status_pipeline` based on Apollo result:
+
+- `"new"` if both email AND phone are confirmed
+- `"awaiting_phone"` if email found but phone pending (async Apollo or web search fallback)
+- `"needs_human_review"` if neither contact method found
+
+**Never fabricate** email addresses or phone numbers. Always record the source URL where a contact detail was found.
+
+## Step 5.5: Contact Backfill Pass
+
+After enriching new leads, run a backfill pass on ALL existing incomplete leads (not just today's):
+
+1. Call `leads_search` with `status: "awaiting_phone"` and `leads_search` with `status: "needs_human_review"`
+2. For each lead still missing a phone number:
+   - Search for their office direct line: `web_search: "<full name>" "<company>" "direct" OR "office" phone`
+   - If not found, search for the company's main office number in their city: `web_search: "<company>" "<city>" office phone number`
+   - Accept main office lines — note type in `notes` (e.g., `"phone: main office (Nashville)"`)
+3. For each lead still missing an email:
+   - Run standard web search for their email
+   - If not found, check other leads at the same company (`leads_search` with `company: "<company>"`) for email patterns
+   - If a pattern exists (e.g., `first.last@domain.com`), suggest an email using that pattern
+   - Store in `email_address`, append to `notes`: `"email suggested based on company pattern (first.last@domain.com) — verify before outreach"`
+4. Update each lead via `leads_upsert` — if both email and phone are now populated, status advances to `"new"` (deliverable)
+
+This backfill pass ensures older leads don't languish with missing contact info.
+
+## Step 6: Generate Report
+
+1. Call `leads_export_csv` filtered to leads with BOTH email AND phone populated (status `"new"` or `"queued_for_outreach"` with today's date range)
+2. Call `leads_stats` to get summary counts
+3. Call `apollo_usage` to get remaining Apollo sync and async phone credits
+4. Call `email_send_csv` to send the report:
+
+**To:** darryl.thompson@raymondjames.com
+**Subject:** `Daily Scout Complete — [DATE] — [N] New Leads`
+**Body:**
+
+```
+New complete leads today: [N]
+
+Top New Leads:
+1. [Name] — [Title] @ [Company] ([Geography])
+2. [Name] — [Title] @ [Company] ([Geography])
+...
+
+[If any leads need human review:]
+Needs Review:
+- [Name] — [Reason]
+
+Capacity Snapshot:
+- Apollo enrichments left this month: [remaining]/[limit]
+- Phone lookups left this month: [remaining]/[limit]
+- Pending phone lookups: [currently_awaiting]
+- Research connectors: web search/fetch/browser available unless noted
+
+The attached CSV contains all complete leads (email + phone confirmed). Each lead appears once — no duplicates.
+```
+
+Do not include search activity summaries (queries run, raw connector logs, or search pacing). Include the Capacity Snapshot above in plain language. Only mention connector issues or rate limits if they reduced results or prevented finding leads.
+
+**CSV attachment:** Use the path from `leads_export_csv` — ONLY leads with both email and phone.
+
+## Step 7: Remember
+
+Use `mem0_remember` to store:
+
+- Number of leads found today
+- Any new data sources discovered
+- Any patterns noticed (e.g., "Insurance Journal published a large batch of moves this week")
+
+## Error Handling
+
+- If a web search fails, log it and continue with other searches
+- If a source is behind a paywall, skip it — do not attempt to bypass
+- If uncertain about P&C relevance, set `status_pipeline` to `needs_human_review`
+- If the email send fails, log the error and retry once
