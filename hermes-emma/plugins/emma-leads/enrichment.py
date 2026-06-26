@@ -104,6 +104,14 @@ class RocketReachClient:
     def _headers(self) -> dict:
         return {"Api-Key": self.api_key, "Content-Type": "application/json"}
 
+    def account(self) -> dict:
+        """GET /account/ — plan + credit_usage. Used for budget telemetry + guards.
+        Measured cost model: search = free; a unique successful lookup = 1
+        premium_lookup credit (returns email+phone together); re-lookup of an
+        already-enriched profile and no_match are both free."""
+        sc, d = self._t("GET", f"{ROCKETREACH_BASE}/account/", self._headers())
+        return d if isinstance(d, dict) else {}
+
     def search(self, query: dict, order_by: str = "relevance", page_size: int = 5, start: int = 1) -> list:
         """POST /person/search — a list of matching profiles (id, name, current_title,
         current_employer, linkedin_url, teaser; NO full contact info). This is the
