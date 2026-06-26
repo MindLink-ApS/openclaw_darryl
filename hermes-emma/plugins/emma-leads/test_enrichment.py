@@ -63,6 +63,34 @@ class TestRocketReachClient(unittest.TestCase):
         self.assertEqual(res["phone"], "+199")
         self.assertGreaterEqual(calls["n"], 1)  # actually polled
 
+    def test_search_then_lookup_by_id(self):
+        # name+company has no rr_id/linkedin -> must SEARCH for the id, then lookup by id
+        def transport(method, url, headers, params=None, json_body=None):
+            if method == "POST" and url.endswith("/person/search"):
+                assert json_body["query"]["name"] == ["Jane Smith"]
+                return 201, {"profiles": [{"id": 42, "linkedin_url": "li/jane"}], "pagination": {"total": 1}}
+            if method == "GET" and url.endswith("/person/lookup"):
+                assert params.get("id") == 42  # used the searched id, NOT name+employer
+                return 200, {"id": 42, "status": "complete",
+                             "emails": [{"email": "jane@acme.com", "smtp_valid": "valid", "type": "professional"}],
+                             "phones": [{"e164": "+1555", "recommended": True}]}
+            return 404, {}
+        rr = E.RocketReachClient("k", transport=transport)
+        res = rr.lookup({"name": "Jane Smith", "company": "Acme"})
+        self.assertEqual(res["email"], "jane@acme.com")
+        self.assertEqual(res["phone"], "+1555")
+
+    def test_search_no_match_returns_no_match(self):
+        # RR has no profile -> no_match, never a guessed/wrong contact
+        def transport(method, url, headers, params=None, json_body=None):
+            if url.endswith("/person/search"):
+                return 201, {"profiles": [], "pagination": {"total": 0}}
+            return 404, {}
+        rr = E.RocketReachClient("k", transport=transport)
+        res = rr.lookup({"name": "Nobody Here", "company": "Nowhere"})
+        self.assertEqual(res["status"], "no_match")
+        self.assertIsNone(res["email"])
+
 
 class TestApolloClient(unittest.TestCase):
     def test_match_returns_email_and_phone(self):

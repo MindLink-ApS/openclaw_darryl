@@ -104,16 +104,44 @@ class RocketReachClient:
     def _headers(self) -> dict:
         return {"Api-Key": self.api_key, "Content-Type": "application/json"}
 
+    def search(self, query: dict, order_by: str = "relevance", page_size: int = 5, start: int = 1) -> list:
+        """POST /person/search — a list of matching profiles (id, name, current_title,
+        current_employer, linkedin_url, teaser; NO full contact info). This is the
+        reliable way to resolve a person to an RR id: the direct name+employer lookup
+        404s for anyone RR can't uniquely match, but search returns candidates."""
+        body = {"query": query, "order_by": order_by, "page_size": page_size, "start": start}
+        sc, data = self._t("POST", f"{ROCKETREACH_BASE}/person/search", self._headers(), json_body=body)
+        if sc >= 400 or not isinstance(data, dict):
+            return []
+        return data.get("profiles") or []
+
+    def _resolve_id(self, person: dict):
+        """Resolve a person to an RR profile id by searching name + current_employer.
+        Returns None if RR has no confident match (we do NOT fall back to a name-only
+        search — a wrong match would ship a wrong contact)."""
+        name, company = person.get("name"), person.get("company")
+        if not (name and company):
+            return None
+        profs = self.search({"name": [name], "current_employer": [company]})
+        return profs[0].get("id") if profs else None
+
     def lookup(self, person: dict) -> dict:
-        """Look up by rr_id > linkedin_url > name+company. Returns normalized contact."""
+        """Resolve contact info. Precise path: rr_id or linkedin_url. Otherwise SEARCH
+        (name + employer) to get an id, then lookup by id — we never use the direct
+        name+employer lookup (it 404s) and never guess. Returns normalized contact;
+        status 'no_match' when RR has no profile for this person."""
+        rid = person.get("rr_id")
+        li = person.get("linkedin_url")
+        if not rid and not li:
+            rid = self._resolve_id(person)
+            if not rid:
+                return {"email": None, "phone": None, "status": "no_match", "source": "rocketreach"}
+
         params: dict = {}
-        if person.get("rr_id"):
-            params["id"] = person["rr_id"]
-        elif person.get("linkedin_url"):
-            params["linkedin_url"] = person["linkedin_url"]
-        elif person.get("name") and person.get("company"):
-            params["name"] = person["name"]
-            params["current_employer"] = person["company"]
+        if rid:
+            params["id"] = rid
+        elif li:
+            params["linkedin_url"] = li
         else:
             return {"email": None, "phone": None, "status": "no_input", "source": "rocketreach"}
 
@@ -122,10 +150,11 @@ class RocketReachClient:
             return {"email": None, "phone": None, "status": "error", "source": "rocketreach"}
 
         result = self._normalize(data)
-        # Poll if still searching (async lookups).
+        # Poll while a needed field is missing and the lookup is still in progress.
         rr_id = result.get("rr_id")
         attempts = 0
-        while result.get("status") in ("searching", "progress", "waiting") and rr_id and attempts < self.poll_attempts:
+        while ((not result.get("email")) or (not result.get("phone"))) and \
+                result.get("status") in ("searching", "progress", "waiting") and rr_id and attempts < self.poll_attempts:
             time.sleep(self.poll_wait)
             attempts += 1
             sc, d = self._t("GET", f"{ROCKETREACH_BASE}/person/checkStatus", self._headers(), params={"ids": rr_id})
