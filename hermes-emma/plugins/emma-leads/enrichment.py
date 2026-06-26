@@ -25,6 +25,13 @@ Transport = Callable[..., "tuple[int, dict]"]
 ROCKETREACH_BASE = "https://api.rocketreach.co/api/v2"
 APOLLO_BASE = "https://api.apollo.io/api/v1"
 
+# RocketReach + Apollo sit behind Cloudflare, which rejects the default
+# python-httpx/urllib user-agent with HTTP 403 "error code: 1010" (bot block).
+# Sending a normal browser UA fixes it — this was the cause of zero successful
+# RocketReach lookups (the API key itself is valid).
+_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+       "Chrome/120.0.0.0 Safari/537.36")
+
 
 # ─── helpers (pure, unit-tested) ─────────────────────────────────────────────
 
@@ -73,8 +80,11 @@ def apply_delivery_gate(email: Optional[str], phone: Optional[str]) -> str:
 
 def _default_transport(method: str, url: str, headers: dict, params=None, json_body=None):
     import httpx
+    h = {"User-Agent": _UA}
+    if headers:
+        h.update(headers)
     with httpx.Client(timeout=30.0) as client:
-        resp = client.request(method, url, headers=headers, params=params, json=json_body)
+        resp = client.request(method, url, headers=h, params=params, json=json_body)
         try:
             data = resp.json()
         except Exception:
